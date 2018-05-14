@@ -97,11 +97,11 @@ Mat **qr_householder(Mat *A) {
 }
 
 int is_triangle_sup(Mat *X){
-	for (int i = 1; i < X->m; i++)
-		for (int j = 0; j < i; j++)
-			if (fabs(X->data[i][j]) > 0.0005)
-				return 0;
-	return 1;
+  for (int i = 1; i < X->m; i++)
+    for (int j = 0; j < i; j++)
+      if (fabs(X->data[i][j]) > 0.0005)
+        return 0;
+  return 1;
 }
 
 
