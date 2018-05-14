@@ -1,4 +1,6 @@
 #include "matrix.h"
+#include <omp.h> // OpenMP
+
 
 double house_helper(double *x, int n) {
   double normX = vect_norm(x, n);
@@ -109,7 +111,7 @@ void eigen_values(Mat *A) {
     while (is_triangle_sup(A) == 0) {
         QR = qr_householder(A);
         A = matrix_mul(QR[1], QR[0]);
-        matrix_print(A);
+    //    matrix_print(A);
         nb_iter++;
     } 
 
@@ -133,7 +135,10 @@ int main(void) {
     for (int j = 0; j < 10; j++)
       A->data[i][j] = in[i][j];
   }
+  double start = omp_get_wtime();
   eigen_values(A);
+  double stop = omp_get_wtime();
+  printf("Time : %lf\n", stop-start);
   matrix_delete(A);
   return 0;
 }
