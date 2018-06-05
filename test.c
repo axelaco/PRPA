@@ -10,6 +10,7 @@ int main(){
 	int lwork = n;
 	double work[3];
 	double tau[3];
+	//QR FACTORIZATION
 	dgeqrfp_(&m, &n, matrix, &lda, tau, work, &lwork, &info);
 
 	for (int i = 0; i < m; i++){
