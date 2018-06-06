@@ -45,8 +45,8 @@ Mat *matrix_eye(int m, int n) {
   Mat *res = matrix_new(m, n);
   if (!res)
     return NULL;
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < m; j++)
+  for (int i = 0; i < m; i++) {
+    for (int j = 0; j < n; j++)
     {
       if (i == j)
         res->data[i][j] = 1;
@@ -62,8 +62,8 @@ Mat *matrix_zeros(int m, int n) {
   Mat *res = matrix_new(m, n);
   if (!res)
     return NULL;
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < m; j++)
+  for (int i = 0; i < m; i++) {
+    for (int j = 0; j < n; j++)
         res->data[i][j] = 0;
   }
   return res;
@@ -173,15 +173,16 @@ double *vect_prod_mat(Mat *mat, double *u) {
     printf("Error u is NULL\n");
     return NULL;
   }
-  double *res = malloc(sizeof(double) * mat->n);
+  double *res = malloc(sizeof(double) * mat->m);
   if (!res)
     return NULL;
 
   for (int i = 0; i < mat->m; i++) {
-    res[i] = 0;
+    double sum = 0;
     for (int j = 0; j < mat->n; j++) {
-      res[i] += u[j] * mat->data[j][i];
+      sum += u[j] * mat->data[i][j];
     }
+    res[i] = sum;
   }
   return res;
 }
@@ -191,18 +192,18 @@ void vect_print(double *u, int n) {
     return;
 
   for (int i = 0; i < n; i++)
-    printf("%8.3f\n", u[i]);
+    printf("%8.16f\n", u[i]);
 }
 
 double *get_column(Mat *mat, int col) {
   if (!mat)
     return NULL;
 
-  double *x = calloc(mat->n, sizeof(double));
+  double *x = malloc(mat->m * sizeof(double));
   if (!x)
     return NULL;
 
-  for (int i = 0; i < mat->n; i++)
+  for (int i = 0; i < mat->m; i++)
     x[i] = mat->data[i][col];    
   
   return x;
@@ -213,11 +214,11 @@ double *get_column_start(Mat *mat, int col) {
   if (!mat)
     return NULL;
 
-  double *x = calloc(mat->n, sizeof(double));
+  double *x = calloc(mat->m, sizeof(double));
   if (!x)
     return NULL;
 
-  for (int i = col; i < mat->n; i++)
+  for (int i = col; i < mat->m; i++)
     x[i - col] = mat->data[i][col];    
   
   return x;
