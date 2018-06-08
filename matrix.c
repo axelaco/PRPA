@@ -5,7 +5,7 @@ Mat *matrix_new(int m, int n) {
   Mat *res = malloc(sizeof(Mat));
   if (!res)
     return NULL;
-  res->data = malloc(sizeof(double *) * m);
+  res->data = malloc(sizeof(float *) * m);
   if (!res->data)
   {
     free(res);
@@ -13,7 +13,7 @@ Mat *matrix_new(int m, int n) {
   }
   for (int i = 0; i < m; i++)
   {
-    res->data[i] = malloc(sizeof(double) * n);
+    res->data[i] = malloc(sizeof(float) * n);
     if (!res->data[i]) {
       for (int k = 0; k < i; k++)
         free(res->data[k]);
@@ -83,7 +83,7 @@ Mat *matrix_mul(Mat *mat1, Mat *mat2) {
   for (int i = 0; i < mat1->n; i++) {
     for (int j = 0; j < mat1->m; j++)
     {   
-      double sum = 0;
+      float sum = 0;
       for (int k = 0; k < mat1->n; k++)
         sum += mat1->data[i][k] * mat2->data[k][j];
       res->data[i][j] = sum;
@@ -117,32 +117,32 @@ void matrix_print(Mat *mat) {
   }
 }
 
-double vect_norm(double *u, int n) {
+float vect_norm(float *u, int n) {
   if (!u)
     return -1;
-  double res = 0;
+  float res = 0;
   for (int i = 0; i < n; i++) {
     res += pow(u[i], 2);
   }
   return sqrt(res);
 }
 
-double vect_dot(double *u, double *v, int n) {
+float vect_dot(float *u, float *v, int n) {
   if (!u || !v)
     return -1;
-  double res = 0;
+  float res = 0;
   for (int i = 0; i < n; i++) {
     res += u[i] * v[i];
   }
   return res;
 }
 
-void vect_divide(double *u, double scalar, int n) {
+void vect_divide(float *u, float scalar, int n) {
   for (int i = 0; i < n; i++)
     u[i] /= scalar;
 }
 
-void vect_mat_copy(Mat *mat, double *u, int col) {
+void vect_mat_copy(Mat *mat, float *u, int col) {
   if (!mat)
   {
     printf("Func vect_copy:\n");
@@ -160,7 +160,7 @@ void vect_mat_copy(Mat *mat, double *u, int col) {
     mat->data[j][col] = u[j - col];
 }
 
-double *vect_prod_mat(Mat *mat, double *u) {
+float *vect_prod_mat(Mat *mat, float *u) {
   if (!mat)
   {
     printf("Func vect_prod_mat:\n");
@@ -173,12 +173,12 @@ double *vect_prod_mat(Mat *mat, double *u) {
     printf("Error u is NULL\n");
     return NULL;
   }
-  double *res = malloc(sizeof(double) * mat->m);
+  float *res = malloc(sizeof(float) * mat->m);
   if (!res)
     return NULL;
 
   for (int i = 0; i < mat->m; i++) {
-    double sum = 0;
+    float sum = 0;
     for (int j = 0; j < mat->n; j++) {
       sum += u[j] * mat->data[i][j];
     }
@@ -187,7 +187,7 @@ double *vect_prod_mat(Mat *mat, double *u) {
   return res;
 }
 
-void vect_print(double *u, int n) {
+void vect_print(float *u, int n) {
   if (!u)
     return;
 
@@ -195,11 +195,11 @@ void vect_print(double *u, int n) {
     printf("%8.16f\n", u[i]);
 }
 
-double *get_column(Mat *mat, int col) {
+float *get_column(Mat *mat, int col) {
   if (!mat)
     return NULL;
 
-  double *x = malloc(mat->m * sizeof(double));
+  float *x = malloc(mat->m * sizeof(float));
   if (!x)
     return NULL;
 
@@ -210,11 +210,11 @@ double *get_column(Mat *mat, int col) {
 }
 
 
-double *get_column_start(Mat *mat, int col) {
+float *get_column_start(Mat *mat, int col) {
   if (!mat)
     return NULL;
 
-  double *x = calloc(mat->m, sizeof(double));
+  float *x = calloc(mat->m, sizeof(float));
   if (!x)
     return NULL;
 
@@ -224,7 +224,7 @@ double *get_column_start(Mat *mat, int col) {
   return x;
 }
 
-double absolute(double nb) {
+float absolute(float nb) {
   if (nb < 0)
     return -nb;
   return nb;

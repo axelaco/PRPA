@@ -11,8 +11,11 @@ int main(){
 	double work[3];
 	double tau[3];
 	//QR FACTORIZATION
-	dgeqrfp_(&m, &n, matrix, &lda, tau, work, &lwork, &info);
-
+	int ite = 0;
+	while (ite < 5) {
+		dgeqrfp_(&m, &n, matrix, &lda, tau, work, &lwork, &info);
+		ite++;
+	}
 	for (int i = 0; i < m; i++){
 		for (int j = 0 ; j < n; j++)
 			printf(" %f ", matrix[i + j * m]);
