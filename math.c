@@ -38,7 +38,23 @@ Mat *matrix_eye(int m, int n) {
   return res;
 }
 
-
+Mat *matrix_mul(Mat *A, Mat *B) {
+  Mat *res = matrix_new(A->m, B->n);
+  if (!res)
+    return NULL;
+  if (A->n != B->m)
+    return NULL;
+  for (int i = 0; i < A->n; i++) {
+    for (int j = 0; j < B->m; j++) {
+      float sum = 0.0;
+        for (int k = 0; k < A->n; k++) {
+          sum += A->data[k + (i * A->n)] * B->data[j + (k * B->m)];
+        res->data[i * A->m + j];
+      }
+    }
+  }
+  return res;
+}
 Mat *matrix_zeros(int m, int n) {
   Mat *res = matrix_new(m, n);
   return res;
@@ -60,6 +76,33 @@ Mat *matrix_reduce(Mat *m, int maxCol) {
     j++;
   }
   return res;
+}
+Mat *matrix_reduce_cond(Mat *m, int col) {
+  Mat *res = matrix_new((m->m - col), (m->m - col));
+  if (!res)
+    return NULL;
+  int j = 0;
+  for (int i = (m->n * col) + col; i < m->n * m->n; i++) {
+    int y = i % m->n;
+    res->data[j] = m->data[i];
+    if ((y + 1) % m->n == 0) {
+      i += col;
+    }
+    j++;
+  }
+  return res;
+}
+// A copy B
+void matrix_copy_cond(Mat *A, Mat *B, int col) {
+  int j = 0;
+  for (int i = (A->n * col) + col; i < A->n * A->n; i++) {
+    int y = i % A->n;
+    A->data[i] = B->data[j];
+    if ((y + 1) % A->n == 0) {
+      i += col;
+    }
+    j++;
+  }
 }
 void matrix_delete(Mat *mat) {
   if (!mat)
@@ -121,15 +164,24 @@ void vect_mat_copy(Mat *mat, float *u, int col) {
         mat->data[col + i * mat->n] = u[i];
     }
 }
-void vect_mat_copy_cond(Mat *mat, float *u, int col) {
+void vect_mat_copy_cond(Mat *mat, float *u, int col, int line) {
     if (!mat)
         return;
     if (!u)
         return;
     if (!mat->data)
         return;
-    for (int i = 0; i < (col + 1); i++) {
-        mat->data[col + i * mat->n] = u[i];
+    if (!line) {
+      for (int i = 0; i < (col + 1); i++) {
+          mat->data[col + i * mat->n] = u[i];
+      }
+    }
+    else {
+      int k = 0;
+      for (int i = (mat->m * col + col); k < (mat->n - col); i+= mat->m) {
+          mat->data[i] = u[k];
+          k++;
+      }
     }
 }
 float *vect_prod_mat(Mat *mat, float *u) {
@@ -206,13 +258,13 @@ float *get_column_start(Mat *mat, int col) {
   if (!mat)
     return NULL;
 
-  float *x = malloc(mat->m * sizeof(float));
+  float *x = malloc((mat->m - col) * sizeof(float));
   if (!x)
     return NULL;
  if (col >= mat->m)
     return NULL;
   for (int i = col; i < mat->m; i++)
-    x[i] = mat->data[col + i * mat->m];    
+    x[i - col] = mat->data[col + i * mat->m];    
   return x;
 }
 void vect_substract(float *res, float *u , float *v, int m) {
