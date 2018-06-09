@@ -62,7 +62,8 @@ Mat *matrix_zeros(int m, int n) {
 
 Mat *matrix_reduce(Mat *m, int maxCol) {
   if (m->n == (maxCol))
-    return m;
+    return matrix_copy(m);
+  
   Mat *res = matrix_new(m->m, maxCol);
   if (!res)
     return NULL;
@@ -107,11 +108,6 @@ void matrix_copy_cond(Mat *A, Mat *B, int col) {
 void matrix_delete(Mat *mat) {
   if (!mat)
     return;
-  if (!mat->data) {
-    free(mat);
-    return;
-  }
-
   free(mat->data);
   free(mat);
 }
@@ -185,7 +181,7 @@ void vect_mat_copy_cond(Mat *mat, float *u, int col, int line) {
     }
 }
 float *vect_prod_mat(Mat *mat, float *u) {
-      float *res = malloc(sizeof(float) * mat->n);
+      float *res = malloc(sizeof(float) * mat->m);
       if (!res)
           return NULL;
       for (int i = 0; i < mat->m; i++) {
