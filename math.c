@@ -32,12 +32,23 @@ Mat *matrix_eye(int m, int n) {
   Mat *res = matrix_new(m, n);
   if (!res)
     return NULL;
-  for (int i = 0; i < m; i++) {
+  for (int i = 0; i < n; i++) {
       res->data[i + (n * i)] = 1;
   }
   return res;
 }
-
+float *matrix_eye_bis(int m, int n) {
+  float *res = malloc(m * n * sizeof(float));
+  if (!res)
+    return NULL;
+  for (int i = 0; i < m * n; i++) {
+    res[i] = 0;
+  }
+  for (int i = 0; i < n; i++) {
+    res[i + (n*i)] = 1;
+  }
+  return res;
+}
 Mat *matrix_mul(Mat *A, Mat *B) {
   Mat *res = matrix_new(A->m, B->n);
   if (!res)

@@ -1,8 +1,8 @@
 #include "math.h"
 #include <omp.h> // OpenMP
 #include "mkl.h" // Intel MKL
-#define N 3
-#define K 3
+#define N 6
+#define K 6
 //#include <lapacke.h>
 
 // https://blogs.mathworks.com/cleve/2016/10/03/householder-reflections-and-the-qr-decomposition/
@@ -114,11 +114,11 @@ Mat *arnoldi_iteration_mkl(Mat *A, float *v0, int MAX_ITER) {
   float *w = NULL;
   float *fm = NULL;
   float *v = NULL;
-  Mat *VmReduce = NULL;
+  float *VmReduce2 = NULL;
   float *h = NULL;
   float *res = NULL;
   for (int j = 0; j < MAX_ITER; j++) {
-      printf("%d Ite\n", j);
+      //printf("%d Ite\n", j);
       if (j == 0) {      
         // w = A * v0
         w = malloc(sizeof(float) * A->n);
@@ -151,23 +151,30 @@ Mat *arnoldi_iteration_mkl(Mat *A, float *v0, int MAX_ITER) {
         cblas_scopy(A->m, v, 1, (Vm->data + j), Vm->n);
         // Hm(j, j − 1) = ||fm||
         Hm->data[j * Hm->n + (j-1)] = cblas_snrm2(A->n, fm, 1);
-        // Vm(:, 1:j)
-        VmReduce = matrix_reduce(Vm, j + 1);
+
+        float *eyeTmp = matrix_eye_bis(Vm->n, j + 1);
+        int m_vmReduce2 = Vm->m;
+        int n_vmReduce2 = j + 1;
+        
+        VmReduce2 = malloc(sizeof(float) * Vm->m * n_vmReduce2);
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, Vm->m, n_vmReduce2, Vm->n, 1, Vm->data, Vm->n, eyeTmp, n_vmReduce2, 0, VmReduce2, n_vmReduce2);
+        
         // h = Vm(:,1 : j).T ∗ w
-        h = malloc(sizeof(float) * VmReduce->n);
-        cblas_sgemv(CblasRowMajor, CblasTrans, VmReduce->m, VmReduce->n, 1, VmReduce->data, VmReduce->n, w, 1, 0, h, 1);
+        h = malloc(sizeof(float) * n_vmReduce2);
+        cblas_sgemv(CblasRowMajor, CblasTrans, m_vmReduce2, n_vmReduce2, 1, VmReduce2, n_vmReduce2, w, 1, 0, h, 1);
+        
         // Vm(:, 1:j) * h
-        float * tmp = malloc(sizeof(float) * VmReduce->m);
-        cblas_sgemv(CblasRowMajor, CblasNoTrans, VmReduce->m, VmReduce->n, 1, VmReduce->data, VmReduce->n, h, 1, 0, tmp, 1);        
-        // fm = w − Vm(:,1 : j)∗ h
+        float *tmp = malloc(sizeof(float) * m_vmReduce2);
+        cblas_sgemv(CblasRowMajor, CblasNoTrans, m_vmReduce2, n_vmReduce2, 1, VmReduce2, n_vmReduce2, h, 1, 0, tmp, 1);
         vsSub(A->m, w, tmp, fm);
         // Hm(1 : j, j) = h
-        cblas_scopy(VmReduce->n, h, 1, (Hm->data + j), Hm->m);
+        cblas_scopy(n_vmReduce2, h, 1, (Hm->data + j), Hm->m);
 
         free(tmp);
         free(v);
         free(h);
-        matrix_delete(VmReduce);
+        free(eyeTmp);
+        free(VmReduce2);
       }
     }
     free(fm);
@@ -284,10 +291,12 @@ void init_random_matrix(Mat *A) {
 int main(void) {
   int tmp;
   Mat *A = matrix_new(N, N);
+  
   for (int i = 0; i < N * N; i++)
-    A->data[i] = in[i / N][i % N];
+    A->data[i] = in2[i / N][i % N];
   matrix_print(A);
   
+   
   // init_random_matrix(A);
   //puts("");
   float start = omp_get_wtime();

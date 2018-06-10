@@ -13,6 +13,7 @@ Mat *matrix_copy(Mat *src);
 Mat *matrix_eye(int m, int n);
 Mat *matrix_zeros(int m, int n);
 Mat *matrix_mul(Mat *A, Mat *B);
+float *matrix_eye_bis(int m, int n);
 void matrix_delete(Mat *m);
 void matrix_print(Mat *m);
 Mat *matrix_reduce(Mat *m, int maxCol);
