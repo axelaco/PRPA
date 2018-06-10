@@ -79,7 +79,7 @@ Mat *matrix_reduce(Mat *m, int maxCol) {
   if (!res)
     return NULL;
   int j = 0;
-  for (int i = 0; i < m->n * m->n; i++) {
+  for (int i = 0; i < m->m * m->n; i++) {
     int y = i % m->n;
     res->data[j] = m->data[i];
     if ((y + 1) % maxCol == 0) {
@@ -167,7 +167,7 @@ void vect_mat_copy(Mat *mat, float *u, int col) {
         return;
     if (!mat->data)
         return;
-    for (int i = 0; i < mat->n; i++) {
+    for (int i = 0; i < mat->m; i++) {
         mat->data[col + i * mat->n] = u[i];
     }
 }

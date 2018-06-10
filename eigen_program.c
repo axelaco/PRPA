@@ -2,7 +2,7 @@
 #include <omp.h> // OpenMP
 #include "mkl.h" // Intel MKL
 #define N 6
-#define K 6
+#define K 4
 //#include <lapacke.h>
 
 // https://blogs.mathworks.com/cleve/2016/10/03/householder-reflections-and-the-qr-decomposition/
@@ -123,9 +123,7 @@ Mat *arnoldi_iteration_mkl(Mat *A, float *v0, int MAX_ITER) {
         // w = A * v0
         w = malloc(sizeof(float) * A->n);
         cblas_sgemv(CblasRowMajor, CblasNoTrans, A->m, A->n, 1, A->data, A->m, v0, 1, 0, w, 1);
-        //w = vect_prod_mat(A, v0);
         // Vm(:, j) = v0
-        //vect_mat_copy(Vm, v0, j);
         cblas_scopy(A->m, v0, 1, (Vm->data + j), Vm->n);
         // Hm(1,1) = v0.T * w
         Hm->data[0] = cblas_sdot(A->n, v0, 1, w, 1);
@@ -179,6 +177,8 @@ Mat *arnoldi_iteration_mkl(Mat *A, float *v0, int MAX_ITER) {
     }
     free(fm);
     free(w);
+    puts("Vm");
+    matrix_print(Vm);
     matrix_delete(Vm);
     return Hm;
 
@@ -225,6 +225,8 @@ Mat *arnoldi_iteration(Mat *A, float *v0, int MAX_ITER) {
 
     }
   }
+  puts("Vm");
+  matrix_print(Vm);
   return Hm;
 }
 
@@ -241,7 +243,7 @@ void eigen_values(Mat *A) {
     }
     printf("Compute %d krylov space for Matrice A(%d, %d):\n", K, A->m, A->n);
     float start = omp_get_wtime();
-    Mat *Ar = arnoldi_iteration_mkl(A, v, K);
+    Mat *Ar = arnoldi_iteration(A, v, K);
     float stop = omp_get_wtime();
     free(v);
     printf("Time : %lf\n", stop-start);
@@ -283,6 +285,7 @@ float in2[][6] = {
 };  
 void init_random_matrix(Mat *A) {
   float tmp;
+  srand(10);
   for (int i = 0; i < A->m * A->n; i++) {
     tmp = (float) (rand() % 100);
     A->data[i] = tmp;
@@ -291,14 +294,15 @@ void init_random_matrix(Mat *A) {
 int main(void) {
   int tmp;
   Mat *A = matrix_new(N, N);
-  
+  /*
   for (int i = 0; i < N * N; i++)
     A->data[i] = in2[i / N][i % N];
   matrix_print(A);
   
-   
-  // init_random_matrix(A);
-  //puts("");
+   */
+  init_random_matrix(A);
+  matrix_print(A);
+  puts("");
   float start = omp_get_wtime();
   eigen_values(A);
   float stop = omp_get_wtime();
