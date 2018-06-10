@@ -116,6 +116,7 @@ Mat *arnoldi_iteration_mkl(Mat *A, float *v0, int MAX_ITER) {
   float *v = NULL;
   Mat *VmReduce = NULL;
   float *h = NULL;
+  float *res = NULL;
   for (int j = 0; j < MAX_ITER; j++) {
       printf("%d Ite\n", j);
       if (j == 0) {      
@@ -124,25 +125,36 @@ Mat *arnoldi_iteration_mkl(Mat *A, float *v0, int MAX_ITER) {
         cblas_sgemv(CblasRowMajor, CblasNoTrans, A->m, A->n, 1, A->data, A->m, v0, 1, 0, w, 1);
         //w = vect_prod_mat(A, v0);
         // Vm(:, j) = v0
-        vect_mat_copy(Vm, v0, j);
+        //vect_mat_copy(Vm, v0, j);
+        cblas_scopy(A->m, v0, 1, (Vm->data + j), Vm->n);
         // Hm(1,1) = v0.T * w
         Hm->data[0] = cblas_sdot(A->n, v0, 1, w, 1);
-        // fm = w - v0 * v0.T * w
         // v0 * v0.T
-        fm = compute_fm(v0, v0, w, A->n);
+        res = malloc(sizeof(float) * A->n * A->m);
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, A->m, A->m, 1, 1, v0, 1, v0, 1, 0, res, A->m);
+        
+        float *tmp = malloc(sizeof(float) * A->m);
+        fm = malloc(sizeof(float) * A->m);
+
+        // fm = w - v0 * v0.T * w
+        cblas_sgemv(CblasRowMajor, CblasNoTrans, A->m, A->m, 1, res, A->m, w, 1, 0, tmp, 1);
+        vsSub(A->m, w, tmp, fm);
+        
+        free(tmp);
+        free(res);
       } else {
         // v = fm/||fm||
         v = vect_divide_by_scalar(fm, cblas_snrm2(A->n, fm, 1), A->n);
         // w = A * v
         cblas_sgemv(CblasRowMajor, CblasNoTrans, A->m, A->n, 1, A->data, A->m, v, 1, 0, w, 1);
         // Vm(:, j) = v
-        vect_mat_copy(Vm, v, j);
+        cblas_scopy(A->m, v, 1, (Vm->data + j), Vm->n);
         // Hm(j, j − 1) = ||fm||
         Hm->data[j * Hm->n + (j-1)] = cblas_snrm2(A->n, fm, 1);
         // Vm(:, 1:j)
         VmReduce = matrix_reduce(Vm, j + 1);
         // h = Vm(:,1 : j).T ∗ w
-        h = malloc(sizeof(float) * A->n);
+        h = malloc(sizeof(float) * VmReduce->n);
         cblas_sgemv(CblasRowMajor, CblasTrans, VmReduce->m, VmReduce->n, 1, VmReduce->data, VmReduce->n, w, 1, 0, h, 1);
         // Vm(:, 1:j) * h
         float * tmp = malloc(sizeof(float) * VmReduce->m);
@@ -150,7 +162,8 @@ Mat *arnoldi_iteration_mkl(Mat *A, float *v0, int MAX_ITER) {
         // fm = w − Vm(:,1 : j)∗ h
         vsSub(A->m, w, tmp, fm);
         // Hm(1 : j, j) = h
-        vect_mat_copy_cond(Hm, h, j, 0);
+        cblas_scopy(VmReduce->n, h, 1, (Hm->data + j), Hm->m);
+
         free(tmp);
         free(v);
         free(h);
@@ -219,7 +232,6 @@ void eigen_values(Mat *A) {
     for (int i = 0; i < A->n; i++) {
         v[i] /= vNorm;
     }
-    int k = 500;
     printf("Compute %d krylov space for Matrice A(%d, %d):\n", K, A->m, A->n);
     float start = omp_get_wtime();
     Mat *Ar = arnoldi_iteration_mkl(A, v, K);
@@ -272,8 +284,8 @@ void init_random_matrix(Mat *A) {
 int main(void) {
   int tmp;
   Mat *A = matrix_new(N, N);
-  for (int i = 0; i < 3 * 3; i++)
-    A->data[i] = in[i / 3][i % 3];
+  for (int i = 0; i < N * N; i++)
+    A->data[i] = in[i / N][i % N];
   matrix_print(A);
   
   // init_random_matrix(A);
