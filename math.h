@@ -1,4 +1,7 @@
 #include <stdlib.h>
+#ifdef INTEL_MKL
+#include "mkl.h" // Intel MKL
+#endif
 #include <math.h>
 #include <stdio.h>
 
@@ -28,7 +31,7 @@ float *vect_prod_mat(Mat *mat, float *u);
 float *vect_prod_mat_trans(Mat *mat, float *u);
 float *vect_divide_by_scalar(float *u, float scalar, int n);
 void vect_substract(float *res, float *u , float *v, int m);
-float *compute_fm(float *u, float *uT, float *w, int n);
+float *compute_fm(float *u, float *w, int n, int m);
 void vect_print(float *u, int n);
 float *get_column(Mat *mat, int col);
 float *get_column_start(Mat *mat, int col);
