@@ -219,11 +219,11 @@ void vect_mat_copy_cond(Mat *mat, float *u, int col, int line) {
     cblas_scopy(col + 1, u, 1, (mat->data + col), mat->m);
 #endif
 }
-float *vect_prod_mat(Mat *A, float *u) {
-      float *res = malloc(sizeof(float) * A->m);
+// Store result directly in w
+void vect_prod_mat(Mat *A, float *u, float *res) {
 #ifdef NAIVE
       if (!res)
-          return NULL;
+          return;
       for (int i = 0; i < A->m; i++) {
           float sum = 0.0;
           for (int j = 0; j < A->n; j++) {
@@ -231,10 +231,12 @@ float *vect_prod_mat(Mat *A, float *u) {
           }
         res[i] = sum;
     }
-    return res;
 #elif INTEL_MKL
-  cblas_sgemv(CblasRowMajor, CblasNoTrans, A->m, A->n, 1, A->data, A->m, u, 1, 0, res, 1);
-  return res;
+    //    vect_prod_mat(VmReduce, h2, tmp2);
+
+  cblas_sgemv(CblasRowMajor, CblasNoTrans, A->m, A->n, 1, A->data, A->n, u, 1, 0, res, 1);
+  //cblas_sgemv(CblasRowMajor, CblasNoTrans, m_vmReduce2, n_vmReduce2, 1, VmReduce2, n_vmReduce2, h, 1, 0, tmp, 1);
+
 #endif
 }
 
@@ -253,6 +255,7 @@ float *vect_prod_mat_trans(Mat *mat, float *u) {
     return res;
 #elif INTEL_MKL
   cblas_sgemv(CblasRowMajor, CblasTrans, mat->m, mat->n, 1, mat->data, mat->n, u, 1, 0, res, 1);
+  return res;
 #endif
 }
 

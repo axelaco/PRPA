@@ -27,7 +27,7 @@ float vect_dot(float *u, float *v, int n);
 void vect_divide(float *u, float scalar, int n);
 void vect_mat_copy(Mat *mat, float *x, int col);
 void vect_mat_copy_cond(Mat *mat, float *u, int col, int line);
-float *vect_prod_mat(Mat *mat, float *u);
+void vect_prod_mat(Mat *A, float *u, float *res);
 float *vect_prod_mat_trans(Mat *mat, float *u);
 float *vect_divide_by_scalar(float *u, float scalar, int n);
 void vect_substract(float *res, float *u , float *v, int m);
