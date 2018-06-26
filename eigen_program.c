@@ -165,12 +165,12 @@ Mat *arnoldi_iteration(Mat *A, float *v0, int MAX_ITER) {
 
 }
 
-void qr_alg_eigen(Mat *A) {
+float *qr_alg_eigen(Mat *A) {
     Mat *mat_tmp = matrix_new(A->m, A->n);
     int k = 0;
     Mat *R = matrix_zeros(A->m, A->n);
     Mat *Q = matrix_zeros(A->m, A->n);
-    while (k < 100) {
+    while (k < 500) {
       // s = A(n,n)
       float s = A->data[A->n * A->m - 1];
       Mat *eye = matrix_eye(A->n, A->n);
@@ -193,6 +193,7 @@ void qr_alg_eigen(Mat *A) {
       matrix_delete(eye);
       k++;
     }
+    return matrix_diag(A);
 }
 
 void iram(Mat *A, float *v0, int k, int MAX_ITER) {
@@ -211,31 +212,18 @@ void eigen_values(Mat *A) {
     }
     printf("Compute %d krylov space for Matrice A(%d, %d):\n", K, A->m, A->n);
     float start = omp_get_wtime();
-    Mat *Ar = arnoldi_iteration(A, v, K);
+    Mat *Hm = arnoldi_iteration(A, v, K);
     float stop = omp_get_wtime();
     free(v);
     printf("Time : %lf\n", stop-start);
     int k = 0;
-    matrix_print(Ar);
-    qr_alg_eigen(Ar);
-    /*while (k < 100) {
-      Mat **Qr = qr_householder(Ar);
-      puts("Q");
-      matrix_print(Qr[0]);
-      puts("R");
-      matrix_print(Qr[1]);
-      puts("R*Q");
-      
-      Ar = matrix_mul(Qr[1], Qr[0]);
-      matrix_print(Ar);
-      k++;
-    }
-    matrix_print(Ar);
-    */
-    puts("AR");
-    matrix_print(Ar);
-    matrix_delete(Ar);
-
+    puts("Hm:");
+    matrix_print(Hm);
+    float *eigenValues = qr_alg_eigen(Hm);
+    puts("After QR Algorithm:");
+    matrix_print(Hm);
+    puts("Eigen Value of Hm:");
+    vect_print(eigenValues, Hm->m);
 }
 
 
@@ -266,10 +254,11 @@ int main(void) {
   for (int i = 0; i < N * N; i++)
     A->data[i] = in2[i / N][i % N];
   matrix_print(A);
-
-  // init_random_matrix(A);
-  //matrix_print(A);
+  /*
+  init_random_matrix(A);
+  matrix_print(A);
   puts("");
+  */
   float start = omp_get_wtime();
   eigen_values(A);
   float stop = omp_get_wtime();

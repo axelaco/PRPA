@@ -47,6 +47,24 @@ float *matrix_eye_bis(int m, int n) {
   }
   return res;
 }
+float *matrix_diag(Mat *A) {
+  float *res = malloc(sizeof(float) * A->m);
+  if (!res)
+    return NULL;
+#ifdef NAIVE
+  res[0] = A->data[0];
+  int i = (A->m + 1);
+  int j = 1;
+  for (;i < A->m * A->n; i += (A->m + 1)) {
+    res[j] = A->data[i];
+    j++;
+  }
+  return res;
+#elif INTEL_MKL
+  cblas_scopy(A->m, A->data, A->m + 1, res, 1);
+  return res;
+#endif
+}
 Mat *matrix_mul(Mat *A, Mat *B) {
   if (A->n != B->m)
   {
