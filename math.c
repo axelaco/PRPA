@@ -16,16 +16,14 @@ Mat *matrix_new(int m, int n) {
   return res;
 }
 
-Mat *matrix_copy(Mat *src) {
-  if (!src)
-    return NULL;
-  Mat *res = matrix_new(src->m, src->n);
-  if (!res)
-    return NULL;
+void matrix_copy(Mat *src, Mat *dest) {
+  if (!src || !dest)
+    return;
+  if (src->m != dest->m && src->n != dest->n)
+    return;
   for (int i = 0; i < src->n * src->m; i++) {
-      res->data[i] = src->data[i];
+      dest->data[i] = src->data[i];
   }
-  return res;
 }
 
 Mat *matrix_eye(int m, int n) {
@@ -50,34 +48,78 @@ float *matrix_eye_bis(int m, int n) {
   return res;
 }
 Mat *matrix_mul(Mat *A, Mat *B) {
-  Mat *res = matrix_new(A->m, B->n);
-  if (!res)
-    return NULL;
   if (A->n != B->m)
+  {
+    printf("Dim Error\n");
     return NULL;
+  }
+  Mat *res = matrix_new(A->m, B->n);
+  if (!res) {
+    printf("Matrix Res error\n");
+    return NULL;
+  }
+#ifdef NAIVE
   for (int i = 0; i < A->n; i++) {
     for (int j = 0; j < B->m; j++) {
       float sum = 0.0;
         for (int k = 0; k < A->n; k++) {
           sum += A->data[k + (i * A->n)] * B->data[j + (k * B->m)];
-        res->data[i * A->m + j];
+        }
+        res->data[i * A->m + j] = sum;
       }
     }
-  }
   return res;
+#elif INTEL_MKL
+  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, A->m, B->n, A->n, 1, A->data, A->n, B->data, B->n, 0, res->data, res->n);
+  return res;
+#endif
 }
 Mat *matrix_zeros(int m, int n) {
   Mat *res = matrix_new(m, n);
   return res;
 }
-
-Mat *matrix_reduce(Mat *m, int maxCol) {
-
-
-
+void matrix_add(Mat *A, Mat *B, Mat *res) {
+    if (!A || !B)
+    return;
+  if (A->n != B->n && A->m != B->m)
+    return;
 #ifdef NAIVE
-  if (m->n == (maxCol))
-    return matrix_copy(m);
+  for (int i = 0; i < A->n * A->m; i++)
+    res->data[i] = A->data[i] + B->data[i];
+#elif INTEL_MKL
+  vsAdd(A->m * A->n, A->data, B->data, res->data);
+#endif
+}
+void matrix_sub(Mat *A, Mat *B, Mat *res) {
+  if (!A || !B)
+    return;
+  if (A->n != B->n && A->m != B->m)
+    return;
+  if (!res)
+    return;
+#ifdef NAIVE
+  for (int i = 0; i < A->n * A->m; i++)
+    res->data[i] = A->data[i] - B->data[i];
+#elif INTEL_MKL
+    vsSub(A->m * A->n, A->data, B->data, res->data);
+#endif
+}
+void matrix_scalar(Mat *A, float scalar) {
+  if (!A)
+    return;
+  if (!A->data)
+    return;
+  for (int i = 0; i < A->n * A->m; i++) {
+    A->data[i] *= scalar;
+  }
+}
+Mat *matrix_reduce(Mat *m, int maxCol) {
+#ifdef NAIVE
+  if (m->n == (maxCol)) {
+    Mat *res = matrix_new(m->m, m->n);
+    matrix_copy(m, res);
+    return res;
+  }
   Mat *res = matrix_new(m->m, maxCol);
   if (!res)
     return NULL;
@@ -232,11 +274,7 @@ void vect_prod_mat(Mat *A, float *u, float *res) {
         res[i] = sum;
     }
 #elif INTEL_MKL
-    //    vect_prod_mat(VmReduce, h2, tmp2);
-
   cblas_sgemv(CblasRowMajor, CblasNoTrans, A->m, A->n, 1, A->data, A->n, u, 1, 0, res, 1);
-  //cblas_sgemv(CblasRowMajor, CblasNoTrans, m_vmReduce2, n_vmReduce2, 1, VmReduce2, n_vmReduce2, h, 1, 0, tmp, 1);
-
 #endif
 }
 

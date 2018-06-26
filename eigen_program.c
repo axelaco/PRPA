@@ -1,7 +1,7 @@
 #include "math.h"
 #include <omp.h> // OpenMP
 #define N 6
-#define K 4
+#define K 3
 //#include <lapacke.h>
 
 // https://blogs.mathworks.com/cleve/2016/10/03/householder-reflections-and-the-qr-decomposition/
@@ -54,23 +54,21 @@ void house_apply(Mat *U, Mat *Q) {
     Return: [Q, R]
 */
 
-Mat **qr_householder(Mat *A) {
+void qr_householder(Mat *A, Mat *R, Mat *Q1) {
   if (!A)
-    return NULL;
-  Mat **res = malloc(sizeof(Mat *) * 2);
-  if (!res)
-    return NULL;
-  for (int i = 0; i < 2; i++) {
-    res[i] = malloc(sizeof(Mat));
-  }
-  Mat *R = matrix_copy(A);
+    return;
+  if (!R)
+    return;
+  if (!Q1)
+    return;
+  matrix_copy(A, R);
   Mat *U = matrix_zeros(A->m, A->n);  
   if (!U || !R)
-    return NULL;
+    return;
 
   float *u = NULL;
 
-  for (int k = 0; k < A->n; k++) {
+  for (int k = 0; k < A->n - 1; k++) {
     u = get_column_start(R, k);  
     house_helper(u, A->n - k);  
     // U(j:m, j) = u
@@ -87,24 +85,24 @@ Mat **qr_householder(Mat *A) {
     }
   }
   Mat *Q = matrix_eye(U->m, U->n);
-  house_apply(U,  Q);
-  res[0] = Q;
-  res[1] = R;
-  return res;
+  matrix_copy(Q, Q1);
+  house_apply(U,  Q1);
 }
 
 #ifdef INTEL_MKL
 
-Mat *intel_mkl_qr(Mat *Ar, Mat *R) {
+void intel_mkl_qr(Mat *Ar, Mat *R, Mat *Q) {
+  if (!Ar || !R || !Q)
+    return;
   float tau[Ar->m];
   // Compute QR
   LAPACKE_sgeqrf(LAPACK_ROW_MAJOR, Ar->m, Ar->n, Ar->data, Ar->m, tau);
-  Mat *Q = matrix_copy(Ar);
+
+  matrix_copy(Ar, Q);
   // Retrieve R tri upper
   LAPACKE_slacpy(LAPACK_ROW_MAJOR, 'U', Ar->m, Ar->n, Ar->data, Ar->m, R->data, Ar->n);  
   // Retrieve Q 
   LAPACKE_sorgqr(LAPACK_ROW_MAJOR, Ar->m, Ar->n, Ar->m, Q->data, Ar->m, tau);
-  return Q;
 }
 #endif
 
@@ -163,15 +161,43 @@ Mat *arnoldi_iteration(Mat *A, float *v0, int MAX_ITER) {
     }
     free(fm);
     free(w);
-    puts("Vm");
-    matrix_print(Vm);
-    puts("HM");
-    matrix_print(Hm);
-    matrix_delete(Vm);
     return Hm;
 
 }
 
+void qr_alg_eigen(Mat *A) {
+    Mat *mat_tmp = matrix_new(A->m, A->n);
+    int k = 0;
+    Mat *R = matrix_zeros(A->m, A->n);
+    Mat *Q = matrix_zeros(A->m, A->n);
+    while (k < 100) {
+      // s = A(n,n)
+      float s = A->data[A->n * A->m - 1];
+      Mat *eye = matrix_eye(A->n, A->n);
+      // s * I(:,:)
+      matrix_scalar(eye, s);
+
+      //A(:,:) - s * I(:,:)
+      matrix_sub(A, eye, mat_tmp);
+
+      // qr(A(:,:) - s * I(:,:))
+#ifdef NAIVE
+      qr_householder(mat_tmp, R, Q);
+#elif INTEL_MKL
+      intel_mkl_qr(mat_tmp, R, Q);
+#endif
+      // A = R*Q + s*I
+      matrix_add(matrix_mul(R, Q), eye, A);
+      
+      R = matrix_zeros(A->m, A->n);
+      matrix_delete(eye);
+      k++;
+    }
+}
+
+void iram(Mat *A, float *v0, int k, int MAX_ITER) {
+  
+}
 
 void eigen_values(Mat *A) {
   
@@ -189,24 +215,25 @@ void eigen_values(Mat *A) {
     float stop = omp_get_wtime();
     free(v);
     printf("Time : %lf\n", stop-start);
-    //matrix_print(Ar);
-    /* 
-    Mat *R = matrix_zeros(Ar->m, Ar->n);
-    Mat *Q = NULL;;
-    /*
-    Mat **Qr = qr_householder(Ar);
-    puts("Q");
-    matrix_print(Qr[0]);
-    puts("R");
-    matrix_print(Qr[1]);
-    puts("Ar");
+    int k = 0;
     matrix_print(Ar);
-    Q = intel_mkl_qr(Ar, R);
-    puts("R");
-    matrix_print(R);
-    puts("Q");
-    matrix_print(Q);
+    qr_alg_eigen(Ar);
+    /*while (k < 100) {
+      Mat **Qr = qr_householder(Ar);
+      puts("Q");
+      matrix_print(Qr[0]);
+      puts("R");
+      matrix_print(Qr[1]);
+      puts("R*Q");
+      
+      Ar = matrix_mul(Qr[1], Qr[0]);
+      matrix_print(Ar);
+      k++;
+    }
+    matrix_print(Ar);
     */
+    puts("AR");
+    matrix_print(Ar);
     matrix_delete(Ar);
 
 }
@@ -235,14 +262,12 @@ void init_random_matrix(Mat *A) {
 }
 int main(void) {
   int tmp;
-  Mat *A = matrix_new(N, N);
-  /*
+  Mat *A = matrix_new(N, N);  
   for (int i = 0; i < N * N; i++)
     A->data[i] = in2[i / N][i % N];
   matrix_print(A);
-  
-   */
-  init_random_matrix(A);
+
+  // init_random_matrix(A);
   //matrix_print(A);
   puts("");
   float start = omp_get_wtime();

@@ -12,10 +12,13 @@ typedef struct mat_ {
 } Mat;
 
 Mat *matrix_new(int m, int n);
-Mat *matrix_copy(Mat *src);
+void matrix_copy(Mat *src, Mat *dest);
 Mat *matrix_eye(int m, int n);
 Mat *matrix_zeros(int m, int n);
 Mat *matrix_mul(Mat *A, Mat *B);
+void matrix_sub(Mat *A, Mat *B, Mat *res);
+void matrix_add(Mat *A, Mat *B, Mat *res);
+void matrix_scalar(Mat *A, float scalar);
 float *matrix_eye_bis(int m, int n);
 void matrix_delete(Mat *m);
 void matrix_print(Mat *m);
