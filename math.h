@@ -26,6 +26,7 @@ void matrix_print(Mat *m);
 Mat *matrix_transpose(Mat *m);
 Mat *matrix_reduce(Mat *m, int maxCol);
 Mat *matrix_reduce_cond(Mat *m, int col);
+void matrix_copy_sub(Mat *src, Mat *dest, int col);
 void matrix_copy_cond(Mat *A, Mat *B, int col);
 float vect_norm(float *u, int n);
 float vect_dot(float *u, float *v, int n);

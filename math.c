@@ -176,6 +176,15 @@ Mat *matrix_reduce_cond(Mat *m, int col) {
   }
   return res;
 }
+
+// A(:, 1:col) = B(:, 1:col)
+void matrix_copy_sub(Mat *src, Mat *dest, int col) {
+   for (int i = 0; i < dest->m; i++) {
+     for (int j = 0; j < col; j++) {
+       dest->data[(i * col) + j] = src->data[i * dest->m + j];
+     }
+   }
+}
 // A copy B
 void matrix_copy_cond(Mat *src, Mat *dest, int col) {
   int j = 0;
@@ -201,7 +210,7 @@ void matrix_print(Mat *mat) {
   if (!mat->data)
     return;
   for (int i = 0; i < mat->n * mat->m; i++) {
-    printf("%8.3f ", mat->data[i]);
+    printf("%8.6f ", mat->data[i]);
     if ((i + 1) % mat->n == 0)
         printf("\n");
   }

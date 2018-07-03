@@ -32,6 +32,7 @@ complex *matrix_diag(Mat *A);
 void matrix_sub(Mat *A, Mat *B, Mat *res);
 void matrix_add(Mat *A, Mat *B, Mat *res);
 void matrix_scalar(Mat *A, complex scalar);
+void matrix_copy_sub(Mat *src, Mat *dest, int col);
 complex *matrix_eye_bis(int m, int n);
 void matrix_delete(Mat *m);
 void matrix_print(Mat *m);

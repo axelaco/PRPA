@@ -109,8 +109,8 @@ Mat *matrix_mul(Mat *A, Mat *B) {
     }
   return res;
 #elif INTEL_MKL
-  complex alpha = {1, 0};
-  complex beta = {0, 0};
+  complex alpha = (complex){1.0, 0.0};
+  complex beta = (complex){0.0, 0.0};
   cblas_cgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, A->m, B->n, A->n, &alpha, A->data, A->n, B->data, B->n, &beta, res->data, res->n);
   return res;
 #endif
@@ -188,8 +188,8 @@ Mat *matrix_reduce(Mat *m, int maxCol) {
   if (!res)
     return NULL;
   complex *eyeTmp = matrix_eye_bis(m->n, maxCol); 
-  complex alpha = {1, 0};
-  complex beta = {0, 0}; 
+  complex alpha = (complex){1.0, 0.0};
+  complex beta = (complex){0.0, 0.0};
   cblas_cgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m->m, res->n, m->n, &alpha, m->data, m->n, eyeTmp, res->n, &beta, res->data, res->n);
   free(eyeTmp);
   return res;
@@ -211,6 +211,14 @@ Mat *matrix_reduce_cond(Mat *m, int col) {
     j++;
   }
   return res;
+}
+// A(:, 1:col) = B(:, 1:col)
+void matrix_copy_sub(Mat *src, Mat *dest, int col) {
+   for (int i = 0; i < dest->m; i++) {
+     for (int j = 0; j < col; j++) {
+       dest->data[(i * col) + j] = src->data[i * dest->m + j];
+     }
+   }
 }
 // A copy B
 void matrix_copy_cond(Mat *src, Mat *dest, int col) {
@@ -239,11 +247,11 @@ void matrix_print(Mat *mat) {
     return;
   for (int i = 0; i < mat->n * mat->m; i++) {
     if (mat->data[i].imag == 0)
-      printf("%8.3f ", mat->data[i].real);
+      printf("%8.6f ", mat->data[i].real);
     else if (mat->data[i].imag < 0)
-      printf("%8.3f - %8.3fi ", mat->data[i].real, -mat->data[i].imag);
+      printf("%8.6f - %1.3fi ", mat->data[i].real, -mat->data[i].imag);
     else
-      printf("%8.3f + %8.3fi ", mat->data[i].real, mat->data[i].imag);
+      printf("%8.6f + %1.3fi ", mat->data[i].real, mat->data[i].imag);
     if ((i + 1) % mat->n == 0)
         printf("\n");
   }
@@ -261,7 +269,7 @@ Mat *matrix_transpose(Mat *m) {
     return res;
   #elif INTEL_MKL
     matrix_copy(m, res);
-    complex alpha = {1, 0};
+    complex alpha = (complex){1.0, 0.0};
     mkl_cimatcopy('r', 't', m->m, m->n, alpha, res->data, m->n, m->m);
     return res;
   #endif
@@ -355,9 +363,11 @@ void vect_prod_mat(Mat *A, complex *u, complex *res) {
         res[i] = sum;
     }
 #elif INTEL_MKL
-  complex alpha = {1, 0};
-  complex beta = {0, 0};
-  cblas_cgemv(CblasRowMajor, CblasNoTrans, A->m, A->n, &alpha, A->data, A->n, u, 1, &beta, res, 1);
+  complex *alpha = malloc(sizeof(complex));
+  alpha->real = 1.0;
+  alpha->imag = 0.0;
+  complex beta = (complex){0, 0};
+  cblas_cgemv(CblasRowMajor, CblasNoTrans, A->m, A->n, alpha, A->data, A->n, u, 1, &beta, res, 1);
 #endif
 }
 
@@ -375,8 +385,8 @@ complex *vect_prod_mat_trans(Mat *mat, complex *u) {
     }
     return res;
 #elif INTEL_MKL
-  complex alpha = {1, 0};
-  complex beta = {0, 0};
+  complex alpha = (complex){1.0, 0.0};
+  complex beta = (complex){0, 0};
   cblas_cgemv(CblasRowMajor, CblasTrans, mat->m, mat->n, &alpha, mat->data, mat->n, u, 1, &beta, res, 1);
   return res;
 #endif
@@ -396,8 +406,8 @@ void compute_fm(complex *fm, complex *u,  complex *w, int n, int m) {
   
   // v0 * v0.T
   complex *res = malloc(sizeof(complex) * n * m);
-  complex alpha = {1, 0};
-  complex beta = {0, 0};
+  complex alpha = (complex){1.0, 0};
+  complex beta = (complex){0, 0};
   cblas_cgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, m, 1, &alpha, u, 1, u, 1, &beta, res, m);
         
   complex *tmp = malloc(sizeof(complex) * m);
@@ -426,7 +436,7 @@ void vect_print(complex *u, int n) {
     return;
 
   for (int i = 0; i < n; i++)
-    printf("%4.5f + %4.5fi\n", u[i].real, u[i].imag);
+    printf("%8.16f + %.2f\n", u[i].real, u[i].imag);
 }
 
 complex *get_column(Mat *mat, int col) {

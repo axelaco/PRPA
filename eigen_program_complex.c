@@ -1,19 +1,19 @@
 #include "math_complex.h"
 #include <omp.h> // OpenMP
 #define N 6
-#define K 2
+#define K 4
 //#include <lapacke.h>
 
 // QSort Algorithm
-static int my_compare (void const *a, void const *b)
+static int my_compare(void const *a, void const *b)
 {
    /* definir des pointeurs type's et initialise's
       avec les parametres */
-   float const *pa = a;
-   float const *pb = b;
+   complex const *pa = a;
+   complex const *pb = b;
 
    /* evaluer et retourner l'etat de l'evaluation (tri croissant) */
-   return *pa - *pb;
+   return pa->real - pb->real;
 }
 
 
@@ -121,15 +121,12 @@ void intel_mkl_qr(Mat *Ar, Mat *R, Mat *Q) {
   // Retrieve R tri upper
   LAPACKE_clacpy(LAPACK_ROW_MAJOR, 'U', Ar->m, Ar->n, Ar->data, Ar->m, R->data, Ar->n);  
   // Retrieve Q 
- // LAPACKE_sorgqr(LAPACK_ROW_MAJOR, Ar->m, Ar->n, Ar->m, Q->data, Ar->m, tau);
+  LAPACKE_cungqr(LAPACK_ROW_MAJOR, Ar->m, Ar->n, Ar->m, Q->data, Ar->m, tau);
 }
 #endif
 
 void arnoldi_iteration(Mat *A, complex *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm, complex *fm) {
-  vect_divide(v0, (complex){vect_norm(v0, A->n), 0}, A->n);
-  /*Mat *Hm = matrix_zeros(MAX_ITER, MAX_ITER);
-  Mat *Vm = matrix_zeros(A->n, MAX_ITER);
-  */
+  // vect_divide(v0, (complex){vect_norm(v0, A->n), 0}, A->n);
   complex *w = malloc(sizeof(complex) * A->m);
   //float *fm = NULL;
   complex *v = NULL;
@@ -221,13 +218,15 @@ complex *qr_alg_eigen(Mat *A) {/*
     matrix_delete(Q1);
     return matrix_diag(A0);
     */
-  puts("A");
-  matrix_print(A);
+  Mat *tmp = matrix_new(A->m, A->n);
+  matrix_copy(A, tmp);
   complex *w = malloc(sizeof(complex) * A->n);
   Mat *z = matrix_new(A->m, A->n);
-  LAPACKE_chseqr(LAPACK_ROW_MAJOR, 'E', 'I', A->n, 1, A->n, A->data, A->n, w, z->data, A->n);
-  //qsort(wr, A->n, sizeof(*wr), my_compare);
+  LAPACKE_chseqr(LAPACK_ROW_MAJOR, 'E', 'I', A->n, 1, A->n, tmp->data, A->n, w, z->data, A->n);
+  qsort(w, A->n, sizeof(*w), my_compare);
+  matrix_delete(tmp);
   return w;
+
 
 }
 
@@ -243,15 +242,14 @@ void eigen_values(Mat *A) {
         v[i].real /= vNorm;
     }
     vect_print(v, A->n);
-    //iram(A, v, K, 20);
-    
-    Mat *Hm = matrix_zeros(N, N);
-    Mat *Vm = matrix_zeros(A->n, N);
+    //iram(A, v, K, 10);
+    Mat *Hm = matrix_zeros(7, 7);
+    Mat *Vm = matrix_zeros(A->n, 7);
     complex *fm = malloc(sizeof(complex) * A->m);
     printf("Compute %d krylov space for Matrice A(%d, %d):\n", 20, A->m, A->n);
     float start = omp_get_wtime();
     
-    arnoldi_iteration(A, v, 1, N, Hm, Vm, fm);
+    arnoldi_iteration(A, v, 1, 7, Hm, Vm, fm);
     float stop = omp_get_wtime();
     free(v);
     printf("Time : %lf\n", stop-start);
@@ -287,8 +285,9 @@ void iram(Mat *A, complex *v0, int k, int m) {
     printf("Iteration %d\n", nb_iter);
     complex *eigenValues = qr_alg_eigen(Hm);
     Mat *Qm = matrix_eye(Hm->m, Hm->n);
-    vect_print(eigenValues, Hm->m);
+    //vect_print(eigenValues, m - k);
     for (int j = m - k; j >= 0; j--) {
+      printf("%.5f + %.5fi\n", eigenValues[j].real, eigenValues[j].imag);
       Mat *mat_tmp = matrix_new(Hm->m, Hm->n);
       Mat *eye = matrix_eye(Hm->n, Hm->n);
       Mat *R = matrix_zeros(Hm->m, Hm->n);
@@ -296,21 +295,21 @@ void iram(Mat *A, complex *v0, int k, int m) {
       // s * I(:,:)
       matrix_scalar(eye, eigenValues[j]);
       // H(:,:) - s * I(:,:)
+
+      matrix_print(Hm);
       matrix_sub(Hm, eye, mat_tmp);
       #ifdef NAIVE
         qr_householder(mat_tmp, R, Q);
       #elif INTEL_MKL
         intel_mkl_qr(mat_tmp, R, Q);
       #endif
-      // Hm = Qj*HmQj
+      // Hm = Qj.T*Hm*Qj
       Mat *QT = matrix_transpose(Q);
       Hm = matrix_mul(matrix_mul(QT, Hm), Q);
       Mat *QmT = matrix_transpose(Qm);
       Qm = matrix_mul(QmT, Q);
       puts("Hm:");
       matrix_print(Hm);
-      puts("Vm:");
-      matrix_print(Vm);
     }
     // Vm(:,:) * Qm(:, k + 1)
     complex *fm_tmp = malloc(sizeof(complex) * A->m);
@@ -328,9 +327,10 @@ void iram(Mat *A, complex *v0, int k, int m) {
     Mat *tmp_2 = matrix_mul(Vm, QmReduce);
 
     // Vm(:, 1:k) = Vm(::) * QM(:,1:k)
-    matrix_copy_cond(tmp_2, Vm, k);
+    matrix_copy_sub(tmp_2, Vm, k);
     complex *Vk = get_column(Vm, k);
     arnoldi_iteration(A, Vk, k, m, Hm, Vm, fm);
+    matrix_print(Hm);
     nb_iter++;
   }
 }
@@ -340,12 +340,12 @@ complex in[][3] = {
     {{3, 0},{2, 0},{2, 0}}
 };
 complex in2[][6] = {
-    {{35,0},{1,0}, {6,0}, {26,0},{19,0},{24,0}},
-    {{3,0}, {32,0}, {7,0},{21,0},{23,0},{25,0}},
-    {{31,0},{9,0},{2,0},{22,0},{27,0},{20,0}},
-    {{8,0},{28,0},{33,0},{17,0},{10,0},{15,0}},
-    {{30,0},{5,0},{34,0},{12,0},{14,0},{16,0}},
-    {{4,0},{36,0},{29,0},{13,0},{18,0},{11,0}}
+    {{35,0.0},{1,0.0}, {6,0.0}, {26,0.0},{19,0.0},{24,0.0}},
+    {{3,0.0}, {32,0.0}, {7,0.0},{21,0.0},{23,0.0},{25,0.0}},
+    {{31,0.0},{9,0.0},{2,0.0},{22,0.0},{27,0.0},{20,0.0}},
+    {{8,0.0},{28,0.0},{33,0.0},{17,0.0},{10,0.0},{15,0.0}},
+    {{30,0.0},{5,0.0},{34,0.0},{12,0.0},{14,0.0},{16,0.0}},
+    {{4,0.0},{36,0.0},{29,0.0},{13,0.0},{18,0.0},{11,0.0}}
 };  
 void init_random_matrix(Mat *A) {
   float tmp;

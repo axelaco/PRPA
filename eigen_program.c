@@ -1,7 +1,7 @@
 #include "math.h"
 #include <omp.h> // OpenMP
 #define N 6
-#define K 4
+#define K 8
 //#include <lapacke.h>
 
 // QSort Algorithm
@@ -238,15 +238,16 @@ void eigen_values(Mat *A) {
         v[i] /= vNorm;
     }
     vect_print(v, A->n);
-    // iram(A, v, K, 20);
+    //iram(A, v, K, 20);
     
-    Mat *Hm = matrix_zeros(N, N);
-    Mat *Vm = matrix_zeros(A->n, N);
+    
+    Mat *Hm = matrix_zeros(7, 7);
+    Mat *Vm = matrix_zeros(A->n, 7);
     float *fm = malloc(sizeof(float) * A->m);
     printf("Compute %d krylov space for Matrice A(%d, %d):\n", 20, A->m, A->n);
     float start = omp_get_wtime();
     
-    arnoldi_iteration(A, v, 1, N, Hm, Vm, fm);
+    arnoldi_iteration(A, v, 1, 7, Hm, Vm, fm);
     float stop = omp_get_wtime();
     free(v);
     printf("Time : %lf\n", stop-start);
@@ -255,6 +256,7 @@ void eigen_values(Mat *A) {
     matrix_print(Hm);
     puts("Vm: ");
     matrix_print(Vm);
+
     /*float *eigenValues = qr_alg_eigen(Hm);
     puts("After QR Algorithm:");
     matrix_print(Hm);
@@ -323,7 +325,7 @@ void iram(Mat *A, float *v0, int k, int m) {
     Mat *tmp_2 = matrix_mul(Vm, QmReduce);
 
     // Vm(:, 1:k) = Vm(::) * QM(:,1:k)
-    matrix_copy_cond(tmp_2, Vm, k);
+    matrix_copy_sub(tmp_2, Vm, k);
     float *Vk = get_column(Vm, k);
     arnoldi_iteration(A, Vk, k, m, Hm, Vm, fm);
     nb_iter++;
