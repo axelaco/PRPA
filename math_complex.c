@@ -1,11 +1,11 @@
-#include "math.h"
+#include "math_complex.h"
 
 
 Mat *matrix_new(int m, int n) {
   Mat *res = malloc(sizeof(Mat));
   if (!res)
     return NULL;
-  res->data = calloc(m * n, sizeof(float));
+  res->data = malloc(m * n * sizeof(complex));
   if (!res->data)
   {
     free(res);
@@ -31,24 +31,27 @@ Mat *matrix_eye(int m, int n) {
   if (!res)
     return NULL;
   for (int i = 0; i < n; i++) {
-      res->data[i + (n * i)] = 1;
+      res->data[i + (n * i)].im = 0;
+      res->data[i + (n * i)].real = 1;
   }
   return res;
 }
-float *matrix_eye_bis(int m, int n) {
-  float *res = malloc(m * n * sizeof(float));
+complex *matrix_eye_bis(int m, int n) {
+  complex *res = malloc(m * n * sizeof(complex));
   if (!res)
     return NULL;
   for (int i = 0; i < m * n; i++) {
-    res[i] = 0;
+    res[i].real = 1;
+    res[i].im = 0;
   }
   for (int i = 0; i < n; i++) {
-    res[i + (n*i)] = 1;
+    res[i + (n*i)].real = 1;
+    res[i + (n*i)].im = 0;
   }
   return res;
 }
-float *matrix_diag(Mat *A) {
-  float *res = malloc(sizeof(float) * A->m);
+complex *matrix_diag(Mat *A) {
+  complex *res = malloc(sizeof(complex) * A->m);
   if (!res)
     return NULL;
 #ifdef NAIVE
@@ -79,7 +82,7 @@ Mat *matrix_mul(Mat *A, Mat *B) {
 #ifdef NAIVE
   for (int i = 0; i < A->n; i++) {
     for (int j = 0; j < B->m; j++) {
-      float sum = 0.0;
+      complex sum = 0.0;
         for (int k = 0; k < A->n; k++) {
           sum += A->data[k + (i * A->n)] * B->data[j + (k * B->m)];
         }
@@ -122,7 +125,7 @@ void matrix_sub(Mat *A, Mat *B, Mat *res) {
     vsSub(A->m * A->n, A->data, B->data, res->data);
 #endif
 }
-void matrix_scalar(Mat *A, float scalar) {
+void matrix_scalar(Mat *A, complex scalar) {
   if (!A)
     return;
   if (!A->data)
@@ -155,7 +158,7 @@ Mat *matrix_reduce(Mat *m, int maxCol) {
   Mat *res = matrix_new(m->m, maxCol);
   if (!res)
     return NULL;
-  float *eyeTmp = matrix_eye_bis(m->n, maxCol);  
+  complex *eyeTmp = matrix_eye_bis(m->n, maxCol);  
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m->m, res->n, m->n, 1, m->data, m->n, eyeTmp, res->n, 0, res->data, res->n);
   free(eyeTmp);
   return res;
@@ -223,11 +226,11 @@ Mat *matrix_transpose(Mat *m) {
   #endif
 }
 
-float vect_norm(float *u, int n) {
+complex vect_norm(complex *u, int n) {
 #ifdef NAIVE
   if (!u)
     return -1;
-  float res = 0;
+  complex res = 0;
   for (int i = 0; i < n; i++) {
     res += pow(u[i], 2);
   }
@@ -237,11 +240,11 @@ float vect_norm(float *u, int n) {
 #endif
 }
 
-float vect_dot(float *u, float *v, int n) {
+complex vect_dot(complex *u, complex *v, int n) {
   if (!u || !v)
     return -1;
 #ifdef NAIVE
-  float res = 0;
+  complex res = 0;
   for (int i = 0; i < n; i++) {
     res += u[i] * v[i];
   }
@@ -251,12 +254,12 @@ float vect_dot(float *u, float *v, int n) {
 #endif
 }
 
-void vect_divide(float *u, float scalar, int n) {
+void vect_divide(complex *u, complex scalar, int n) {
   for (int i = 0; i < n; i++)
     u[i] /= scalar;
 }
 
-void vect_mat_copy(Mat *mat, float *u, int col) {
+void vect_mat_copy(Mat *mat, complex *u, int col) {
     if (!mat)
         return;
     if (!u)
@@ -271,7 +274,7 @@ void vect_mat_copy(Mat *mat, float *u, int col) {
     cblas_scopy(mat->m, u, 1, (mat->data + col), mat->n);
 #endif
 }
-void vect_mat_copy_cond(Mat *mat, float *u, int col, int line) {
+void vect_mat_copy_cond(Mat *mat, complex *u, int col, int line) {
     if (!mat)
         return;
     if (!u)
@@ -296,12 +299,12 @@ void vect_mat_copy_cond(Mat *mat, float *u, int col, int line) {
 #endif
 }
 // Store result directly in w
-void vect_prod_mat(Mat *A, float *u, float *res) {
+void vect_prod_mat(Mat *A, complex *u, complex *res) {
 #ifdef NAIVE
       if (!res)
           return;
       for (int i = 0; i < A->m; i++) {
-          float sum = 0.0;
+          complex sum = 0.0;
           for (int j = 0; j < A->n; j++) {
               sum += A->data[j + (i * A->n)] * u[j];
           }
@@ -312,13 +315,13 @@ void vect_prod_mat(Mat *A, float *u, float *res) {
 #endif
 }
 
-float *vect_prod_mat_trans(Mat *mat, float *u) {
-  float *res = malloc(sizeof(float) * mat->n);
+complex *vect_prod_mat_trans(Mat *mat, complex *u) {
+  complex *res = malloc(sizeof(complex) * mat->n);
   if (!res)
           return NULL;
 #ifdef NAIVE   
       for (int i = 0; i < mat->n; i++) {
-          float sum = 0.0;
+          complex sum = 0.0;
           for (int j = 0; j < mat->m; j++) {
               sum += mat->data[i + (j * mat->n)] * u[j];
           }
@@ -331,10 +334,10 @@ float *vect_prod_mat_trans(Mat *mat, float *u) {
 #endif
 }
 
-void compute_fm(float *fm, float *u,  float *w, int n, int m) {
+void compute_fm(complex *fm, complex *u,  complex *w, int n, int m) {
 #ifdef NAIVE   
    for (int i = 0; i < m; i++) {
-      float sum = 0;
+      complex sum = 0;
       for (int j = 0; j < n; j++) {
         sum += u[i] * u[j] * w[j];
       }
@@ -343,10 +346,10 @@ void compute_fm(float *fm, float *u,  float *w, int n, int m) {
 #elif INTEL_MKL
   
   // v0 * v0.T
-  float *res = malloc(sizeof(float) * n * m);
+  complex *res = malloc(sizeof(complex) * n * m);
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, m, 1, 1, u, 1, u, 1, 0, res, m);
         
-  float *tmp = malloc(sizeof(float) * m);
+  complex *tmp = malloc(sizeof(complex) * m);
   
   // fm = w - v0 * v0.T * w
   cblas_sgemv(CblasRowMajor, CblasNoTrans, m, m, 1, res, m, w, 1, 0, tmp, 1);
@@ -356,8 +359,8 @@ void compute_fm(float *fm, float *u,  float *w, int n, int m) {
 #endif
 }
 
-float *vect_divide_by_scalar(float *u, float scalar, int n) {
-  float *res = malloc(sizeof(float) * n);
+complex *vect_divide_by_scalar(complex *u, complex scalar, int n) {
+  complex *res = malloc(sizeof(complex) * n);
   if (!res)
     return NULL;
   for (int i = 0; i < n; i++) {
@@ -365,7 +368,7 @@ float *vect_divide_by_scalar(float *u, float scalar, int n) {
   }
   return res;
 }
-void vect_print(float *u, int n) {
+void vect_print(complex *u, int n) {
   if (!u)
     return;
 
@@ -373,11 +376,11 @@ void vect_print(float *u, int n) {
     printf("%8.16f\n", u[i]);
 }
 
-float *get_column(Mat *mat, int col) {
+complex *get_column(Mat *mat, int col) {
   if (!mat)
     return NULL;
 
-  float *x = malloc(mat->m * sizeof(float));
+  complex *x = malloc(mat->m * sizeof(complex));
   if (!x)
     return NULL;
 
@@ -386,11 +389,11 @@ float *get_column(Mat *mat, int col) {
   return x;
 }
 
-float *get_column_start(Mat *mat, int col) {
+complex *get_column_start(Mat *mat, int col) {
   if (!mat)
     return NULL;
 
-  float *x = malloc((mat->m - col) * sizeof(float));
+  complex *x = malloc((mat->m - col) * sizeof(complex));
   if (!x)
     return NULL;
  if (col >= mat->m)
@@ -399,7 +402,7 @@ float *get_column_start(Mat *mat, int col) {
     x[i - col] = mat->data[col + i * mat->m];    
   return x;
 }
-void vect_substract(float *res, float *u , float *v, int m) {
+void vect_substract(complex *res, complex *u , complex *v, int m) {
 #ifdef NAIVE
   for (int i = 0; i < m; i++) {
     res[i] = u[i] - v[i];
@@ -408,12 +411,12 @@ void vect_substract(float *res, float *u , float *v, int m) {
   vsSub(m, u, v, res);
 #endif
 }
-float absolute(float nb) {
+complex absolute(complex nb) {
   if (nb < 0)
     return -nb;
   return nb;
 }
-void vect_add(float *res, float *a, float *b, int m) {
+void vect_add(complex *res, complex *a, complex *b, int m) {
   //#ifdef NAIVE
     for (int i = 0; i < m; i++)
       res[i] = a[i] + b[i];
@@ -421,12 +424,12 @@ void vect_add(float *res, float *a, float *b, int m) {
     vsAdd(m, a, b, res);
   #endif*/
 }
-void vect_scalar(float *u, float scalar, int n) {
+void vect_scalar(complex *u, complex scalar, int n) {
 #ifdef NAIVE
   for (int i = 0; i < n; i++)
     u[i] *= scalar;
 #elif INTEL_MKL
-  float *vect_eye = malloc(sizeof(float) * n);
+  complex *vect_eye = malloc(sizeof(complex) * n);
   for (int i = 0; i < n; i++)
     vect_eye[i] = 1;
   cblas_saxpy(n, scalar, vect_eye, 1, u, 1);
