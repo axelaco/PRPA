@@ -1,6 +1,19 @@
 #include "math_complex.h"
 
-
+// Utils
+// complex product
+complex complex_prod(complex a1, complex a2) {
+  complex res = {0,0};
+  res.real = a1.real * a2.real - (a1.imag * a2.imag);
+  res.imag = a1.real * a2.imag + a2.real * a1.imag;
+  return res;
+}
+complex complex_add(complex a1, complex a2) {
+  complex res = {0,0};
+  res.real = a1.real + a2.real;
+  res.imag = a1.imag + a2.imag;
+  return res;
+}
 Mat *matrix_new(int m, int n) {
   Mat *res = malloc(sizeof(Mat));
   if (!res)
@@ -22,7 +35,8 @@ void matrix_copy(Mat *src, Mat *dest) {
   if (src->m != dest->m && src->n != dest->n)
     return;
   for (int i = 0; i < src->n * src->m; i++) {
-      dest->data[i] = src->data[i];
+      dest->data[i].imag = src->data[i].imag;
+      dest->data[i].real = src->data[i].real;      
   }
 }
 
@@ -31,7 +45,7 @@ Mat *matrix_eye(int m, int n) {
   if (!res)
     return NULL;
   for (int i = 0; i < n; i++) {
-      res->data[i + (n * i)].im = 0;
+      res->data[i + (n * i)].imag = 0;
       res->data[i + (n * i)].real = 1;
   }
   return res;
@@ -41,12 +55,12 @@ complex *matrix_eye_bis(int m, int n) {
   if (!res)
     return NULL;
   for (int i = 0; i < m * n; i++) {
-    res[i].real = 1;
-    res[i].im = 0;
+    res[i].real = 0;
+    res[i].imag = 0;
   }
   for (int i = 0; i < n; i++) {
     res[i + (n*i)].real = 1;
-    res[i + (n*i)].im = 0;
+    res[i + (n*i)].imag = 0;
   }
   return res;
 }
@@ -59,12 +73,13 @@ complex *matrix_diag(Mat *A) {
   int i = (A->m + 1);
   int j = 1;
   for (;i < A->m * A->n; i += (A->m + 1)) {
-    res[j] = A->data[i];
+    res[j].real = A->data[i].real;
+    res[j].imag = A->data[i].imag;
     j++;
   }
   return res;
 #elif INTEL_MKL
-  cblas_scopy(A->m, A->data, A->m + 1, res, 1);
+  cblas_ccopy(A->m, A->data, A->m + 1, res, 1);
   return res;
 #endif
 }
@@ -82,16 +97,18 @@ Mat *matrix_mul(Mat *A, Mat *B) {
 #ifdef NAIVE
   for (int i = 0; i < A->n; i++) {
     for (int j = 0; j < B->m; j++) {
-      complex sum = 0.0;
+      complex sum = {0.0, 0.0};
         for (int k = 0; k < A->n; k++) {
-          sum += A->data[k + (i * A->n)] * B->data[j + (k * B->m)];
+          sum = complex_add(sum, complex_prod(A->data[k + (i * A->n)], B->data[i + (k * B->m)]));
         }
         res->data[i * A->m + j] = sum;
       }
     }
   return res;
 #elif INTEL_MKL
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, A->m, B->n, A->n, 1, A->data, A->n, B->data, B->n, 0, res->data, res->n);
+  complex alpha = {1, 0};
+  complex beta = {0, 0};
+  cblas_cgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, A->m, B->n, A->n, &alpha, A->data, A->n, B->data, B->n, &beta, res->data, res->n);
   return res;
 #endif
 }
@@ -105,10 +122,12 @@ void matrix_add(Mat *A, Mat *B, Mat *res) {
   if (A->n != B->n && A->m != B->m)
     return;
 #ifdef NAIVE
-  for (int i = 0; i < A->n * A->m; i++)
-    res->data[i] = A->data[i] + B->data[i];
+  for (int i = 0; i < A->n * A->m; i++) {
+    res->data[i].real = A->data[i].real + B->data[i].real;
+    res->data[i].imag = A->data[i].imag + B->data[i].imag;
+  }
 #elif INTEL_MKL
-  vsAdd(A->m * A->n, A->data, B->data, res->data);
+  vcAdd(A->m * A->n, A->data, B->data, res->data);
 #endif
 }
 void matrix_sub(Mat *A, Mat *B, Mat *res) {
@@ -119,19 +138,23 @@ void matrix_sub(Mat *A, Mat *B, Mat *res) {
   if (!res)
     return;
 #ifdef NAIVE
-  for (int i = 0; i < A->n * A->m; i++)
-    res->data[i] = A->data[i] - B->data[i];
+  for (int i = 0; i < A->n * A->m; i++) {
+    res->data[i].real = A->data[i].real - B->data[i].real;
+    res->data[i].imag = A->data[i].imag - B->data[i].imag;
+  }
+    
 #elif INTEL_MKL
-    vsSub(A->m * A->n, A->data, B->data, res->data);
+    vcSub(A->m * A->n, A->data, B->data, res->data);
 #endif
 }
-void matrix_scalar(Mat *A, complex scalar) {
+void matrix_scalar(Mat *A, float scalar) {
   if (!A)
     return;
   if (!A->data)
     return;
   for (int i = 0; i < A->n * A->m; i++) {
-    A->data[i] *= scalar;
+    A->data[i].imag *= scalar;
+    A->data[i].real *= scalar;
   }
 }
 Mat *matrix_reduce(Mat *m, int maxCol) {
@@ -147,7 +170,8 @@ Mat *matrix_reduce(Mat *m, int maxCol) {
   int j = 0;
   for (int i = 0; i < m->m * m->n; i++) {
     int y = i % m->n;
-    res->data[j] = m->data[i];
+    res->data[j].real = m->data[i].real;
+    res->data[j].imag = m->data[i].imag;    
     if ((y + 1) % maxCol == 0) {
       i += m->n - (y + 1);
     }
@@ -158,12 +182,15 @@ Mat *matrix_reduce(Mat *m, int maxCol) {
   Mat *res = matrix_new(m->m, maxCol);
   if (!res)
     return NULL;
-  complex *eyeTmp = matrix_eye_bis(m->n, maxCol);  
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m->m, res->n, m->n, 1, m->data, m->n, eyeTmp, res->n, 0, res->data, res->n);
+  complex *eyeTmp = matrix_eye_bis(m->n, maxCol); 
+  complex alpha = {1, 0};
+  complex beta = {0, 0}; 
+  cblas_cgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m->m, res->n, m->n, &alpha, m->data, m->n, eyeTmp, res->n, &beta, res->data, res->n);
   free(eyeTmp);
   return res;
 #endif
 }
+// A(j:$, j:$)
 Mat *matrix_reduce_cond(Mat *m, int col) {
   Mat *res = matrix_new((m->m - col), (m->m - col));
   if (!res)
@@ -171,7 +198,8 @@ Mat *matrix_reduce_cond(Mat *m, int col) {
   int j = 0;
   for (int i = (m->n * col) + col; i < m->n * m->n; i++) {
     int y = i % m->n;
-    res->data[j] = m->data[i];
+    res->data[j].real = m->data[i].real;
+    res->data[j].imag = m->data[i].imag;
     if ((y + 1) % m->n == 0) {
       i += col;
     }
@@ -184,7 +212,8 @@ void matrix_copy_cond(Mat *src, Mat *dest, int col) {
   int j = 0;
   for (int i = (dest->n * col) + col; i < dest->n * dest->n; i++) {
     int y = i % dest->n;
-    dest->data[i] = src->data[j];
+    dest->data[i].real = src->data[j].real;
+    dest->data[i].imag = src->data[j].imag;
     if ((y + 1) % dest->n == 0) {
       i += col;
     }
@@ -204,7 +233,10 @@ void matrix_print(Mat *mat) {
   if (!mat->data)
     return;
   for (int i = 0; i < mat->n * mat->m; i++) {
-    printf("%8.3f ", mat->data[i]);
+    if (mat->data[i].imag < 0)
+      printf("%4.3f - %4.3fi ", mat->data[i].real, -mat->data[i].imag);
+    else
+      printf("%4.3f + %4.3fi ", mat->data[i].real, mat->data[i].imag);
     if ((i + 1) % mat->n == 0)
         printf("\n");
   }
@@ -215,48 +247,48 @@ Mat *matrix_transpose(Mat *m) {
   #ifdef NAIVE
     for (int i = 0; i < m->m; i++) {
       for (int j = 0; j < m->n; j++) {
-        res->data[j * m->n + i] = m->data[i * m->m + j];
+        res->data[j * m->n + i].real = m->data[i * m->m + j].real;
+        res->data[j * m->n + i].imag = m->data[i * m->m + j].imag;
       }
     }
     return res;
   #elif INTEL_MKL
     matrix_copy(m, res);
-    mkl_simatcopy ('r', 't', m->m, m->n, 1, res->data, m->n, m->m);
+    complex alpha = {1, 0};
+    mkl_cimatcopy('r', 't', m->m, m->n, alpha, res->data, m->n, m->m);
     return res;
   #endif
 }
 
-complex vect_norm(complex *u, int n) {
+float vect_norm(complex *u, int n) {
 #ifdef NAIVE
   if (!u)
     return -1;
-  complex res = 0;
+  float res = 0;
   for (int i = 0; i < n; i++) {
-    res += pow(u[i], 2);
+    res += pow(u[i].real, 2) + pow(u[i].imag, 2);
   }
   return sqrt(res);
 #elif INTEL_MKL
-  return cblas_snrm2(n, u, 1);
+  return cblas_scnrm2(n, u, 1);
 #endif
 }
 
 complex vect_dot(complex *u, complex *v, int n) {
   if (!u || !v)
-    return -1;
-#ifdef NAIVE
-  complex res = 0;
+    return (complex){-1,-1};
+  complex res = {0, 0};
   for (int i = 0; i < n; i++) {
-    res += u[i] * v[i];
+    res = complex_add(res, complex_prod(u[i], v[i]));
   }
   return res;
-#elif INTEL_MKL
-  return cblas_sdot(n, u, 1, v, 1);
-#endif
 }
 
-void vect_divide(complex *u, complex scalar, int n) {
-  for (int i = 0; i < n; i++)
-    u[i] /= scalar;
+void vect_divide(complex *u, float scalar, int n) {
+  for (int i = 0; i < n; i++) {
+    u[i].real /= scalar;
+    u[i].imag /= scalar;
+  }
 }
 
 void vect_mat_copy(Mat *mat, complex *u, int col) {
@@ -268,10 +300,11 @@ void vect_mat_copy(Mat *mat, complex *u, int col) {
         return;
 #ifdef NAIVE
     for (int i = 0; i < mat->m; i++) {
-        mat->data[col + i * mat->n] = u[i];
+        mat->data[col + i * mat->n].real = u[i].real;
+        mat->data[col + i * mat->n].imag = u[i].imag;
     }
 #elif INTEL_MKL
-    cblas_scopy(mat->m, u, 1, (mat->data + col), mat->n);
+    cblas_ccopy(mat->m, u, 1, (mat->data + col), mat->n);
 #endif
 }
 void vect_mat_copy_cond(Mat *mat, complex *u, int col, int line) {
@@ -284,18 +317,21 @@ void vect_mat_copy_cond(Mat *mat, complex *u, int col, int line) {
 #ifdef NAIVE    
     if (!line) {
       for (int i = 0; i < (col + 1); i++) {
-          mat->data[col + i * mat->n] = u[i];
+          mat->data[col + i * mat->n].real = u[i].real;
+          mat->data[col + i * mat->n].imag = u[i].imag;
+
       }
     }
     else {
       int k = 0;
       for (int i = (mat->m * col + col); k < (mat->n - col); i+= mat->m) {
-          mat->data[i] = u[k];
+          mat->data[i].real = u[k].real;
+          mat->data[i].imag = u[k].imag;
           k++;
       }
     }
 #elif INTEL_MKL
-    cblas_scopy(col + 1, u, 1, (mat->data + col), mat->m);
+    cblas_ccopy(col + 1, u, 1, (mat->data + col), mat->m);
 #endif
 }
 // Store result directly in w
@@ -304,14 +340,16 @@ void vect_prod_mat(Mat *A, complex *u, complex *res) {
       if (!res)
           return;
       for (int i = 0; i < A->m; i++) {
-          complex sum = 0.0;
+          complex sum = {0.0, 0.0};
           for (int j = 0; j < A->n; j++) {
-              sum += A->data[j + (i * A->n)] * u[j];
+              sum = complex_add(sum, complex_prod(A->data[j + (i * A->n)], u[j]));
           }
         res[i] = sum;
     }
 #elif INTEL_MKL
-  cblas_sgemv(CblasRowMajor, CblasNoTrans, A->m, A->n, 1, A->data, A->n, u, 1, 0, res, 1);
+  complex alpha = {1, 0};
+  complex beta = {0, 0};
+  cblas_cgemv(CblasRowMajor, CblasNoTrans, A->m, A->n, &alpha, A->data, A->n, u, 1, &beta, res, 1);
 #endif
 }
 
@@ -321,15 +359,17 @@ complex *vect_prod_mat_trans(Mat *mat, complex *u) {
           return NULL;
 #ifdef NAIVE   
       for (int i = 0; i < mat->n; i++) {
-          complex sum = 0.0;
+          complex sum = {0.0, 0.0};
           for (int j = 0; j < mat->m; j++) {
-              sum += mat->data[i + (j * mat->n)] * u[j];
+              sum = complex_add(sum, complex_prod(mat->data[i + (j * mat->n)], u[j]));
           }
         res[i] = sum;
     }
     return res;
 #elif INTEL_MKL
-  cblas_sgemv(CblasRowMajor, CblasTrans, mat->m, mat->n, 1, mat->data, mat->n, u, 1, 0, res, 1);
+  complex alpha = {1, 0};
+  complex beta = {0, 0};
+  cblas_cgemv(CblasRowMajor, CblasTrans, mat->m, mat->n, &alpha, mat->data, mat->n, u, 1, &beta, res, 1);
   return res;
 #endif
 }
@@ -337,34 +377,38 @@ complex *vect_prod_mat_trans(Mat *mat, complex *u) {
 void compute_fm(complex *fm, complex *u,  complex *w, int n, int m) {
 #ifdef NAIVE   
    for (int i = 0; i < m; i++) {
-      complex sum = 0;
+      complex sum = {0,0};
       for (int j = 0; j < n; j++) {
-        sum += u[i] * u[j] * w[j];
+        sum = complex_add(sum, complex_prod(complex_prod(u[i], u[j]), w[j]));
       }
-      fm[i] = w[i] - sum;
+      fm[i].real = w[i].real - sum.real;
+      fm[i].imag = w[i].imag - sum.imag;
   }
 #elif INTEL_MKL
   
   // v0 * v0.T
   complex *res = malloc(sizeof(complex) * n * m);
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, m, 1, 1, u, 1, u, 1, 0, res, m);
+  complex alpha = {1, 0};
+  complex beta = {0, 0};
+  cblas_cgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, m, 1, &alpha, u, 1, u, 1, &beta, res, m);
         
   complex *tmp = malloc(sizeof(complex) * m);
   
   // fm = w - v0 * v0.T * w
-  cblas_sgemv(CblasRowMajor, CblasNoTrans, m, m, 1, res, m, w, 1, 0, tmp, 1);
-  vsSub(m, w, tmp, fm);
+  cblas_cgemv(CblasRowMajor, CblasNoTrans, m, m, &alpha, res, m, w, 1, &beta, tmp, 1);
+  vcSub(m, w, tmp, fm);
   free(tmp);
   free(res);
 #endif
 }
 
-complex *vect_divide_by_scalar(complex *u, complex scalar, int n) {
+complex *vect_divide_by_scalar(complex *u, float scalar, int n) {
   complex *res = malloc(sizeof(complex) * n);
   if (!res)
     return NULL;
   for (int i = 0; i < n; i++) {
-    res[i] = u[i] / scalar;
+    res[i].imag = u[i].imag / scalar;
+    res[i].real = u[i].real / scalar;
   }
   return res;
 }
@@ -373,7 +417,7 @@ void vect_print(complex *u, int n) {
     return;
 
   for (int i = 0; i < n; i++)
-    printf("%8.16f\n", u[i]);
+    printf("%4.5f + %4.5fi\n", u[i].real, u[i].imag);
 }
 
 complex *get_column(Mat *mat, int col) {
@@ -405,34 +449,46 @@ complex *get_column_start(Mat *mat, int col) {
 void vect_substract(complex *res, complex *u , complex *v, int m) {
 #ifdef NAIVE
   for (int i = 0; i < m; i++) {
-    res[i] = u[i] - v[i];
+    res[i].real = u[i].real - v[i].real;
+    res[i].imag = u[i].imag - v[i].imag;
   }
 #elif INTEL_MKL
-  vsSub(m, u, v, res);
+  vcSub(m, u, v, res);
 #endif
 }
+/*
 complex absolute(complex nb) {
-  if (nb < 0)
-    return -nb;
+  if (nb.real < 0) {
+    nb.real = -nb.real;
+    nb.imag = -nb.imag;
+    return -nb.real;
+  }
   return nb;
 }
+*/
 void vect_add(complex *res, complex *a, complex *b, int m) {
   //#ifdef NAIVE
-    for (int i = 0; i < m; i++)
-      res[i] = a[i] + b[i];
+    for (int i = 0; i < m; i++) {
+      res[i].real = a[i].real + b[i].real;
+      res[i].imag = a[i].imag + b[i].imag;
+    }
  /* #elif INTEL_MKL
     vsAdd(m, a, b, res);
   #endif*/
 }
-void vect_scalar(complex *u, complex scalar, int n) {
+void vect_scalar(complex *u, float scalar, int n) {
 #ifdef NAIVE
   for (int i = 0; i < n; i++)
-    u[i] *= scalar;
+  {
+    u[i].real *= scalar;
+    u[i].imag *= scalar;
+  }
 #elif INTEL_MKL
   complex *vect_eye = malloc(sizeof(complex) * n);
-  for (int i = 0; i < n; i++)
-    vect_eye[i] = 1;
-  cblas_saxpy(n, scalar, vect_eye, 1, u, 1);
+  for (int i = 0; i < n; i++) {
+    vect_eye[i] = (complex) {1, 0};
+  }
+  cblas_caxpy(n, &scalar, vect_eye, 1, u, 1);
   free(vect_eye);
 #endif
 }
