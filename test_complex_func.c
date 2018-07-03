@@ -3,7 +3,7 @@
 
 int main(void) {
     Mat *A = matrix_new(N, N);
-    Mat *Asub = matrix_new(N, N);
+    Mat *Asub = matrix_zeros(N, N);
     Mat *ACop = matrix_new(N, N);
     Mat *D = matrix_eye(N,N);
     for (int i = 0; i < N*N; i++) {
@@ -64,7 +64,7 @@ int main(void) {
     matrix_print(AReduce2);
 
     // Test Matrix Copy from started col
-    puts("A(j:$, j:$)");
+    puts("A(1:j, 1:j)");
     matrix_copy_cond(A, Asub, 2);
     matrix_print(Asub);
 

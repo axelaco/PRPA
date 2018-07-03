@@ -14,6 +14,9 @@ complex complex_add(complex a1, complex a2) {
   res.imag = a1.imag + a2.imag;
   return res;
 }
+float complex_modulo(complex a1) {
+  return sqrt(pow(a1.real, 2) + pow(a1.imag, 2));
+}
 Mat *matrix_new(int m, int n) {
   Mat *res = malloc(sizeof(Mat));
   if (!res)
@@ -114,6 +117,9 @@ Mat *matrix_mul(Mat *A, Mat *B) {
 }
 Mat *matrix_zeros(int m, int n) {
   Mat *res = matrix_new(m, n);
+  for (int i = 0; i < m * n; i++) {
+    res->data[i] = (complex){0,0};
+  }
   return res;
 }
 void matrix_add(Mat *A, Mat *B, Mat *res) {
@@ -147,14 +153,13 @@ void matrix_sub(Mat *A, Mat *B, Mat *res) {
     vcSub(A->m * A->n, A->data, B->data, res->data);
 #endif
 }
-void matrix_scalar(Mat *A, float scalar) {
+void matrix_scalar(Mat *A, complex scalar) {
   if (!A)
     return;
   if (!A->data)
     return;
   for (int i = 0; i < A->n * A->m; i++) {
-    A->data[i].imag *= scalar;
-    A->data[i].real *= scalar;
+    A->data[i] = complex_prod(A->data[i], scalar);
   }
 }
 Mat *matrix_reduce(Mat *m, int maxCol) {
@@ -233,10 +238,12 @@ void matrix_print(Mat *mat) {
   if (!mat->data)
     return;
   for (int i = 0; i < mat->n * mat->m; i++) {
-    if (mat->data[i].imag < 0)
-      printf("%4.3f - %4.3fi ", mat->data[i].real, -mat->data[i].imag);
+    if (mat->data[i].imag == 0)
+      printf("%8.3f ", mat->data[i].real);
+    else if (mat->data[i].imag < 0)
+      printf("%8.3f - %8.3fi ", mat->data[i].real, -mat->data[i].imag);
     else
-      printf("%4.3f + %4.3fi ", mat->data[i].real, mat->data[i].imag);
+      printf("%8.3f + %8.3fi ", mat->data[i].real, mat->data[i].imag);
     if ((i + 1) % mat->n == 0)
         printf("\n");
   }
@@ -284,10 +291,11 @@ complex vect_dot(complex *u, complex *v, int n) {
   return res;
 }
 
-void vect_divide(complex *u, float scalar, int n) {
+void vect_divide(complex *u, complex scalar, int n) {
   for (int i = 0; i < n; i++) {
-    u[i].real /= scalar;
-    u[i].imag /= scalar;
+    float tmp = complex_modulo(scalar) * complex_modulo(scalar);
+    u[i].real = ((u[i].real * scalar.real) + (u[i].imag * scalar.imag)) / tmp;
+    u[i].imag = ((scalar.real * u[i].imag - u[i].real * scalar.imag))  / tmp;
   }
 }
 
@@ -402,13 +410,14 @@ void compute_fm(complex *fm, complex *u,  complex *w, int n, int m) {
 #endif
 }
 
-complex *vect_divide_by_scalar(complex *u, float scalar, int n) {
+complex *vect_divide_by_scalar(complex *u, complex scalar, int n) {
   complex *res = malloc(sizeof(complex) * n);
   if (!res)
     return NULL;
   for (int i = 0; i < n; i++) {
-    res[i].imag = u[i].imag / scalar;
-    res[i].real = u[i].real / scalar;
+    float tmp = complex_modulo(scalar) * complex_modulo(scalar);
+    res[i].real = ((u[i].real * scalar.real) + (u[i].imag * scalar.imag)) / tmp;
+    res[i].imag = ((scalar.real * u[i].imag - u[i].real * scalar.imag)) / tmp;
   }
   return res;
 }
@@ -456,16 +465,9 @@ void vect_substract(complex *res, complex *u , complex *v, int m) {
   vcSub(m, u, v, res);
 #endif
 }
-/*
-complex absolute(complex nb) {
-  if (nb.real < 0) {
-    nb.real = -nb.real;
-    nb.imag = -nb.imag;
-    return -nb.real;
-  }
-  return nb;
+float absolute(complex nb) {
+  return complex_modulo(nb);
 }
-*/
 void vect_add(complex *res, complex *a, complex *b, int m) {
   //#ifdef NAIVE
     for (int i = 0; i < m; i++) {
@@ -476,12 +478,11 @@ void vect_add(complex *res, complex *a, complex *b, int m) {
     vsAdd(m, a, b, res);
   #endif*/
 }
-void vect_scalar(complex *u, float scalar, int n) {
+void vect_scalar(complex *u, complex scalar, int n) {
 #ifdef NAIVE
   for (int i = 0; i < n; i++)
   {
-    u[i].real *= scalar;
-    u[i].imag *= scalar;
+    u[i] = complex_prod(u[i], scalar);
   }
 #elif INTEL_MKL
   complex *vect_eye = malloc(sizeof(complex) * n);
