@@ -379,7 +379,7 @@ void vect_print(float *u, int n) {
     return;
 
   for (int i = 0; i < n; i++)
-    printf("%8.16f\n", u[i]);
+    printf("%8.5f\n", u[i]);
 }
 
 float *get_column(Mat *mat, int col) {
@@ -390,8 +390,9 @@ float *get_column(Mat *mat, int col) {
   if (!x)
     return NULL;
 
-  for (int i = 0; i < mat->m; i++)
-    x[i] = mat->data[col + i * mat->m];    
+  for (int i = 0; i < mat->m; i++) {
+    x[i] = mat->data[col + i * mat->n];    
+  }
   return x;
 }
 

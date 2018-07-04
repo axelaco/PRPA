@@ -136,6 +136,10 @@ void lanczos_facto(Mat *A, float *v0, int k, int m) {
 
     //T(j,j) = wj'.T * vj
     float a1 = vect_dot(wPrime, v, A->m);
+
+    vect_print(v, A->m);
+    printf("\nwPrime\n");
+    vect_print(wPrime, A->m);
     Tm->data[(Tm->m * j) + j]  = a1;
     // wj = wj' - T(j,j)*vj - Bj*vj-1
     vect_scalar(v, a1, A->m);
@@ -145,14 +149,14 @@ void lanczos_facto(Mat *A, float *v0, int k, int m) {
       float *tmp = malloc(sizeof(float) * A->m);
       vect_substract(tmp, wPrime, v, A->m);
       vect_substract(fm, tmp, vjOld, A->m);
-      
       free(tmp);
     } else {
       vect_substract(fm, wPrime, v, A->m);
     }
     // Bj = ||wj||
     b1 = vect_norm(fm, A->m);
-    Tm->data[j + j + 1] = b1;
+    printf("b1 = %.6f\n", b1);
+    Tm->data[(Tm->m * j) + j + 1] = b1;
     Tm->data[Tm->m * (j + 1) + j] = b1;
     free(v);
     v = vect_divide_by_scalar(fm, b1, A->m);
@@ -283,7 +287,7 @@ void eigen_values(Mat *A) {
         v[i] /= vNorm;
     }
     vect_print(v, A->n);
-    lanczos_facto(A, v, 1, 3);
+    lanczos_facto(A, v, 1, 20);
     //iram(A, v, K, 20);
     /*
     
@@ -442,12 +446,11 @@ int main(void) {
   init_random_matrix_sym(A);
   matrix_print(A);
   puts("");
-  /*
+  
   float start = omp_get_wtime();
   eigen_values(A);
   float stop = omp_get_wtime();
  // printf("Time : %lf\n", stop-start);
- */
   matrix_delete(A);
  
   return 0;
