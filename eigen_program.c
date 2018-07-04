@@ -16,7 +16,7 @@ static int my_compare (void const *a, void const *b)
    return *pa - *pb;
 }
 
-
+float *qr_alg_eigen(Mat *A);
 void iram(Mat *A, float *v0, int k, int MAX_ITER);
 // https://blogs.mathworks.com/cleve/2016/10/03/householder-reflections-and-the-qr-decomposition/
 void H(float *u, Mat *R) {
@@ -119,11 +119,8 @@ void intel_mkl_qr(Mat *Ar, Mat *R, Mat *Q) {
   LAPACKE_sorgqr(LAPACK_ROW_MAJOR, Ar->m, Ar->n, Ar->m, Q->data, Ar->m, tau);
 }
 #endif
-void lanczos_facto(Mat *A, float *v0, int k, int m) {
-  Mat *Vm = matrix_zeros(N, m);
-  Mat *Tm = matrix_zeros(m, m);
+void lanczos_facto(Mat *A, float *v0, int k, int m, Mat *Vm, Mat *Tm, float *fm) {
   float b1 = 0;
-  float *fm = malloc(sizeof(float) * A->m);
   float *wPrime = malloc(sizeof(float) * A->m);
   float *v = malloc(sizeof(float) * A->m);
   vect_copy(v0, v, A->m);
@@ -136,10 +133,6 @@ void lanczos_facto(Mat *A, float *v0, int k, int m) {
 
     //T(j,j) = wj'.T * vj
     float a1 = vect_dot(wPrime, v, A->m);
-
-    vect_print(v, A->m);
-    printf("\nwPrime\n");
-    vect_print(wPrime, A->m);
     Tm->data[(Tm->m * j) + j]  = a1;
     // wj = wj' - T(j,j)*vj - Bj*vj-1
     vect_scalar(v, a1, A->m);
@@ -155,7 +148,6 @@ void lanczos_facto(Mat *A, float *v0, int k, int m) {
     }
     // Bj = ||wj||
     b1 = vect_norm(fm, A->m);
-    printf("b1 = %.6f\n", b1);
     Tm->data[(Tm->m * j) + j + 1] = b1;
     Tm->data[Tm->m * (j + 1) + j] = b1;
     free(v);
@@ -168,6 +160,49 @@ void lanczos_facto(Mat *A, float *v0, int k, int m) {
   matrix_print(Tm);
   puts("Vm:");
   matrix_print(Vm);
+}
+void lanczos_ir(Mat *A, float *v0, int k, int m) {
+  Mat *Vm = matrix_zeros(A->n, m);
+  Mat *Tm = matrix_zeros(m, m);
+  float *fm = malloc(sizeof(float) * A->m);
+  lanczos_facto(A, v0, 1, m, Vm, Tm, fm);
+  while(1) {
+    float *eigs = qr_alg_eigen(Tm);
+    Mat *Qm = matrix_eye(m, m);
+    for (int j = m - k; j >= 0; j--) {
+      Mat *mat_tmp = matrix_new(Tm->m, Tm->n);
+      Mat *eye = matrix_eye(Tm->n, Tm->n);
+      Mat *R = matrix_zeros(Tm->m, Tm->n);
+      Mat *Q = matrix_zeros(Tm->m, Tm->n);
+      // s * I(:,:)
+      matrix_scalar(eye, eigs[j]);
+      // H(:,:) - s * I(:,:)
+      matrix_sub(Tm, eye, mat_tmp);
+      #ifdef NAIVE
+        qr_householder(mat_tmp, R, Q);
+      #elif INTEL_MKL
+        intel_mkl_qr(mat_tmp, R, Q);
+      #endif
+      // Hm = Qj*HmQj
+      Mat *QT = matrix_transpose(Q);
+      Tm = matrix_mul(matrix_mul(QT, Tm), Q);
+      Mat *QmT = matrix_transpose(Qm);
+      Qm = matrix_mul(QmT, Q);
+      puts("Tm:");
+      matrix_print(Tm);
+      puts("Vm:");
+      matrix_print(Vm);
+    }
+    float *tmp_fm = malloc(sizeof(float) * A->m);
+    float *tmp_fm2 = malloc(sizeof(float) * A->m);
+
+    vect_copy(fm, tmp_fm, A->m);
+    vect_scalar(tmp_fm, Qm->data[m * k], A->m);
+    float *QmK = get_column(Qm, k + 1);
+    vect_prod_mat(Vm, QmK, tmp_fm2);
+    vect_add(fm, tmp_fm2, tmp_fm, A->m);
+    lanczos_facto(A, get_column(Vm, k), k, m, Vm, Tm, fm);
+  }
 }
 void arnoldi_iteration(Mat *A, float *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm, float *fm) {
   vect_divide(v0, vect_norm(v0, A->n), A->n);
@@ -287,7 +322,10 @@ void eigen_values(Mat *A) {
         v[i] /= vNorm;
     }
     vect_print(v, A->n);
-    lanczos_facto(A, v, 1, 20);
+    Mat *Vm = matrix_zeros(A->n, 20);
+    Mat *Tm = matrix_zeros(20, 20);
+    float *fm = malloc(sizeof(float) * A->m);
+    lanczos_facto(A, v, 1, 20,  Vm, Tm, fm);
     //iram(A, v, K, 20);
     /*
     
