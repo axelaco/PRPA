@@ -13,10 +13,9 @@ static int my_compare (void const *a, void const *b)
    float const *pb = b;
 
    /* evaluer et retourner l'etat de l'evaluation (tri croissant) */
-   return *pa - *pb;
+   return abs(*pb) - abs(*pa);
 }
 
-float *qr_alg_eigen(Mat *A);
 void iram(Mat *A, float *v0, int k, int MAX_ITER);
 // https://blogs.mathworks.com/cleve/2016/10/03/householder-reflections-and-the-qr-decomposition/
 void H(float *u, Mat *R) {
@@ -166,17 +165,19 @@ void lanczos_facto(Mat *A, float *v0, int k, int m, Mat *Vm, Mat *Tm, float *fm)
   free(v);
   free(wPrime);
 }
-void lanczos_ir(Mat *A, float *v0, int k, int m) {
+float *lanczos_ir(Mat *A, float *v0, int k, int m) {
   Mat *Vm = matrix_zeros(A->n, m);
   Mat *Tm = matrix_zeros(m, m);
+  float residual = 1;
   float *fm = malloc(sizeof(float) * A->m);
   Mat *Qm = NULL;
   Mat *QT = NULL;
   Mat *QmT = NULL;
+  float eps = 0.00001;
   lanczos_facto(A, v0, 1, m, Vm, Tm, fm);
   int nb_iter = 0;
-  while(nb_iter < 100) {
-    float *eigs = qr_alg_eigen(Tm);
+  while(residual > eps || nb_iter < 100) {
+    float *eigs = rritz(Tm, &residual, fm, k, residual);
     Qm = matrix_eye(m, m);
     for (int j = m - k; j >= 0; j--) {
       Mat *mat_tmp = matrix_new(Tm->m, Tm->n);
@@ -239,13 +240,14 @@ void lanczos_ir(Mat *A, float *v0, int k, int m) {
 
     nb_iter++;
   }
-  puts("Tm:");
-  matrix_print(Tm);
-  puts("Vm:");
-  matrix_print(Vm);
+
   matrix_delete(Vm);
+  Mat *eigVector = matrix_zeros(Tm->m, Tm->n);
+  float *eigs = qr_alg_eigen(Tm, eigVector);
+  matrix_delete(eigVector);
   matrix_delete(Tm);
   free(fm);
+  return eigs;
 }
 void arnoldi_iteration(Mat *A, float *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm, float *fm) {
   vect_divide(v0, vect_norm(v0, A->n), A->n);
@@ -303,56 +305,6 @@ void arnoldi_iteration(Mat *A, float *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm,
     }
     free(w);
 }
-void rritz(Mat *Hm, float *f, int k, int selec, double nrmfr) {
-
-}
-float *qr_alg_eigen(Mat *A) {/*
-    matrix_print(A);
-    Mat *mat_tmp = matrix_new(A->m, A->n);
-    Mat *A0 = matrix_new(A->m, A->n);
-    matrix_copy(A, A0);
-    int k = 0;
-    Mat *R = matrix_zeros(A->m, A->n);
-    Mat *Q = matrix_zeros(A->m, A->n);
-    Mat *Q1 = matrix_eye(A->m, A->n);
-    while (k < 50000) {
-      // s = A(n,n)
-      float s = A->data[A->n * A->m - 1];
-      Mat *eye = matrix_eye(A->n, A->n);
-      // s * I(:,:)
-      matrix_scalar(eye, s);
-
-      //A(:,:) - s * I(:,:)
-      matrix_sub(A0, eye, mat_tmp);
-
-      // qr(A(:,:) - s * I(:,:))
-#ifdef NAIVE
-      qr_householder(mat_tmp, R, Q);
-#elif INTEL_MKL
-      intel_mkl_qr(mat_tmp, R, Q);
-#endif
-      // A = R*Q + s*I
-      matrix_add(matrix_mul(R, Q), eye, A0);
-      Q1 = matrix_mul(Q1, Q);
-      R = matrix_zeros(A0->m, A0->n);
-      matrix_delete(eye);
-      
-      k++;
-    }
-    matrix_print(A0);
-    matrix_delete(Q1);
-    return matrix_diag(A0);
-    */
-  float *wr = malloc(sizeof(float) * A->n);
-  float *wi = malloc(sizeof(float) * A->n);
-  Mat *z = matrix_new(A->m, A->n);
-  LAPACKE_shseqr(LAPACK_ROW_MAJOR, 'E', 'I', A->n, 1, A->n, A->data, A->n, wr, wi, z->data, A->n);
-  qsort(wr, A->n, sizeof(*wr), my_compare);
-  free(wi);
-  matrix_delete(z);
-  return wr;
-}
-
 
 void eigen_values(Mat *A) {
   
@@ -365,47 +317,14 @@ void eigen_values(Mat *A) {
         v[i] /= vNorm;
     }
     vect_print(v, A->n);
-    /*Mat *Vm = matrix_zeros(A->n, 20);
-    Mat *Tm = matrix_zeros(20, 20);
-    float *fm = malloc(sizeof(float) * A->m);
-    */
-    lanczos_ir(A, v, K, 20);//,  Vm, Tm, fm);
+    float *res = lanczos_ir(A, v, K, 20);
+    printf("##### Eigen Values: #####\n");
+    qsort(res, 20, sizeof(*res), my_compare);
+    for (int i = 0; i < K; i++)
+      printf("%8.5f\n", res[i]);
+    free(res);
     free(v);
-    //iram(A, v, K, 20);
-    /*
-    
-    Mat *Hm = matrix_zeros(7, 7);
-    Mat *Vm = matrix_zeros(A->n, 7);
-    float *fm = malloc(sizeof(float) * A->m);
-    printf("Compute %d krylov space for Matrice A(%d, %d):\n", 20, A->m, A->n);
-    float start = omp_get_wtime();
-    
-    arnoldi_iteration(A, v, 1, 7, Hm, Vm, fm);
-    float stop = omp_get_wtime();
-    free(v);
-    printf("Time : %lf\n", stop-start);
-    int k = 0;
-    puts("Hm:");
-    matrix_print(Hm);
-    puts("Vm: ");
-    matrix_print(Vm);
-    */
-    /*float *eigenValues = qr_alg_eigen(Hm);
-    puts("After QR Algorithm:");
-    matrix_print(Hm);
-    puts("Eigen Value of Hm:");
-    vect_print(eigenValues, Hm->m);
-    */
 }
-/*
-void double_qr_step(Mat *Hm) {
-  int p = Hm->n;
-  while (p > 2) {
-    int q = p - 1;
-    float s = Hm->data[q][q] + Hm->data[]
-  }
-}
-*/
 
 void iram(Mat *A, float *v0, int k, int m) {
   Mat *Hm = matrix_zeros(m, m);
@@ -415,7 +334,7 @@ void iram(Mat *A, float *v0, int k, int m) {
   int nb_iter = 0;
   while (nb_iter < 1) {
     printf("Iteration %d\n", nb_iter);
-    float *eigenValues = qr_alg_eigen(Hm);
+    float *eigenValues = qr_alg_eigen(Hm, NULL);
     Mat *Qm = matrix_eye(Hm->m, Hm->n);
     vect_print(eigenValues, Hm->m);
     for (int j = m - k; j >= 0; j--) {

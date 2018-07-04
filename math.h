@@ -10,12 +10,15 @@ typedef struct mat_ {
   int n;
   float *data;
 } Mat;
-
+float *qr_alg_eigen(Mat *A, Mat *eigVector);
+float *rritz(Mat *Tm, float *mx, float *fm, int k, float nrmfr);
 Mat *matrix_new(int m, int n);
 void matrix_copy(Mat *src, Mat *dest);
 Mat *matrix_eye(int m, int n);
 Mat *matrix_zeros(int m, int n);
 Mat *matrix_mul(Mat *A, Mat *B);
+float *matrix_get_row(Mat *A, int m);
+float *matrix_off_diag(Mat *A);
 void matrix_mul_bis(Mat *res, Mat *A, Mat *B);
 float *matrix_diag(Mat *A);
 void matrix_sub(Mat *A, Mat *B, Mat *res);

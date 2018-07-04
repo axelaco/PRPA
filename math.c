@@ -1,4 +1,51 @@
 #include "math.h"
+// QSort Algorithm
+static int cmp_abs (void const *a, void const *b)
+{
+   /* definir des pointeurs type's et initialise's
+      avec les parametres */
+   float const *pa = a;
+   float const *pb = b;
+
+   /* evaluer et retourner l'etat de l'evaluation (tri croissant) */
+   return abs(*pa) - abs(*pb);
+}
+
+float *rritz(Mat *Tm, float *mx, float *fm, int k, float nrmfr) {
+  Mat *q = matrix_zeros(Tm->m, Tm->n);
+  float *w = qr_alg_eigen(Tm, q);
+  int m = Tm->m;
+  float *qRow = matrix_get_row(q, q->n);
+  // sort by Magnitude
+  qsort(w, Tm->m, sizeof(*w), cmp_abs);
+  for (int i = 0; i < m; i++) {
+    qRow[i] = abs(qRow[i]);
+  }
+
+  float *ritz = malloc(sizeof(float) * k);
+  for (int i = 0; i < k; i++) {
+    ritz[i] = vect_norm(fm, Tm->m) * qRow[i];
+  }
+  *mx = vect_norm(ritz, k) / nrmfr;
+  return w;
+}
+
+// TODO Implement method for NAIVE implem
+float *qr_alg_eigen(Mat *A, Mat *eigVector) {
+#ifdef NAIVE
+
+#elif INTEL_MKL
+ // float *wr = malloc(sizeof(float) * A->n);
+//  float *wi = malloc(sizeof(float) * A->n);
+//  Mat *z = matrix_new(A->m, A->n);
+  float *diag = matrix_diag(A);
+  float *off_diag = matrix_off_diag(A);
+  LAPACKE_ssteqr(LAPACK_ROW_MAJOR, 'I', A->n, diag, off_diag, eigVector->data, eigVector->n);
+  //LAPACKE_shseqr(LAPACK_ROW_MAJOR, 'E', 'I', A->n, 1, A->n, A->data, A->n, wr, wi, z->data, A->n);
+ // free(wi);
+  return diag;
+#endif
+}
 
 
 Mat *matrix_new(int m, int n) {
@@ -47,6 +94,22 @@ float *matrix_eye_bis(int m, int n) {
   }
   for (int i = 0; i < n; i++) {
     res[i + (n*i)] = 1;
+  }
+  return res;
+}
+float *matrix_off_diag(Mat *A) {
+  float *res = malloc(sizeof(float) * A->n - 1);
+  int j = 0;
+  for (int i = 1; i < A->m * A->n; i += (A->m + 1)) {
+    res[j] = A->data[i];
+    j++;
+  }
+  return res;
+}
+float *matrix_get_row(Mat *A, int m) {
+  float *res = malloc(sizeof(float) * A->n);
+  for (int i = (A->m*m); i < A->m * A->n; i++) {
+    res[i - (A->m * m)] = A->data[i];
   }
   return res;
 }
