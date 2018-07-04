@@ -1,7 +1,7 @@
 #include "math.h"
 #include <omp.h> // OpenMP
-#define N 6
-#define K 8
+#define N 10
+#define K 3
 //#include <lapacke.h>
 
 // QSort Algorithm
@@ -119,7 +119,52 @@ void intel_mkl_qr(Mat *Ar, Mat *R, Mat *Q) {
   LAPACKE_sorgqr(LAPACK_ROW_MAJOR, Ar->m, Ar->n, Ar->m, Q->data, Ar->m, tau);
 }
 #endif
+void lanczos_facto(Mat *A, float *v0, int k, int m) {
+  Mat *Vm = matrix_zeros(N, m);
+  Mat *Tm = matrix_zeros(m, m);
+  float b1 = 0;
+  float *fm = malloc(sizeof(float) * A->m);
+  float *wPrime = malloc(sizeof(float) * A->m);
+  float *v = malloc(sizeof(float) * A->m);
+  vect_copy(v0, v, A->m);
+  for (int j = k - 1; j < m - 1; j++) {
+    // wj' = A * vj
+    vect_prod_mat(A, v, wPrime);
 
+    // Vm(:,j) = vj
+    vect_mat_copy(Vm, v, j);
+
+    //T(j,j) = wj'.T * vj
+    float a1 = vect_dot(wPrime, v, A->m);
+    Tm->data[(Tm->m * j) + j]  = a1;
+    // wj = wj' - T(j,j)*vj - Bj*vj-1
+    vect_scalar(v, a1, A->m);
+    if (j > 0) {
+      float* vjOld = get_column(Vm, j - 1);
+      vect_scalar(vjOld, b1, A->m);
+      float *tmp = malloc(sizeof(float) * A->m);
+      vect_substract(tmp, wPrime, v, A->m);
+      vect_substract(fm, tmp, vjOld, A->m);
+      
+      free(tmp);
+    } else {
+      vect_substract(fm, wPrime, v, A->m);
+    }
+    // Bj = ||wj||
+    b1 = vect_norm(fm, A->m);
+    Tm->data[j + j + 1] = b1;
+    Tm->data[Tm->m * (j + 1) + j] = b1;
+    free(v);
+    v = vect_divide_by_scalar(fm, b1, A->m);
+  }
+  vect_mat_copy(Vm, v, m - 1);
+  vect_prod_mat(A, v, fm);
+  Tm->data[m * m - 1] = vect_dot(fm, v, A->m);
+  puts("Tm:");
+  matrix_print(Tm);
+  puts("Vm:");
+  matrix_print(Vm);
+}
 void arnoldi_iteration(Mat *A, float *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm, float *fm) {
   vect_divide(v0, vect_norm(v0, A->n), A->n);
   /*Mat *Hm = matrix_zeros(MAX_ITER, MAX_ITER);
@@ -238,8 +283,9 @@ void eigen_values(Mat *A) {
         v[i] /= vNorm;
     }
     vect_print(v, A->n);
+    lanczos_facto(A, v, 1, 3);
     //iram(A, v, K, 20);
-    
+    /*
     
     Mat *Hm = matrix_zeros(7, 7);
     Mat *Vm = matrix_zeros(A->n, 7);
@@ -256,7 +302,7 @@ void eigen_values(Mat *A) {
     matrix_print(Hm);
     puts("Vm: ");
     matrix_print(Vm);
-
+    */
     /*float *eigenValues = qr_alg_eigen(Hm);
     puts("After QR Algorithm:");
     matrix_print(Hm);
@@ -332,9 +378,9 @@ void iram(Mat *A, float *v0, int k, int m) {
   }
 }
 float in[][3] = {
-    {2,1,2},
-    {4,2,3},  
-    {3,2,2}
+    {1,2,3},
+    {2,2,4},  
+    {3,4,3}
 };
 float in2[][6] = {
     {35,1, 6, 26,19,24},
@@ -347,9 +393,20 @@ float in2[][6] = {
 void init_random_matrix(Mat *A) {
   float tmp;
   srand(10);
-  for (int i = 0; i < A->m * A->n; i++) {
+  for (int i = 0; i < (A->m * A->n ); i++) {
     tmp = (float) (rand() % 100);
     A->data[i] = tmp;
+  }
+}
+void init_random_matrix_sym(Mat *A) {
+  float tmp;
+  srand(10);
+  for (int i = 0; i < A->m; i++) {
+    for (int j = 0; j < A->n; j++) {
+      tmp = (float) (rand() % 100);
+      A->data[A->m * i + j] = tmp;
+      A->data[A->n * j + i] = tmp; 
+    }
   }
 }
  float in3[] = {
@@ -378,18 +435,19 @@ int main(void) {
 
   int tmp;
   Mat *A = matrix_new(N, N);  
-  for (int i = 0; i < N * N; i++)
-    A->data[i] = in2[i / N][i % N];
+  /*for (int i = 0; i < N * N; i++)
+    A->data[i] = in[i / N][i % N];
   matrix_print(A);
-  /*
-  init_random_matrix(A);
+  */
+  init_random_matrix_sym(A);
   matrix_print(A);
   puts("");
-  */
+  /*
   float start = omp_get_wtime();
   eigen_values(A);
   float stop = omp_get_wtime();
  // printf("Time : %lf\n", stop-start);
+ */
   matrix_delete(A);
  
   return 0;

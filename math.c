@@ -422,6 +422,11 @@ float absolute(float nb) {
     return -nb;
   return nb;
 }
+void vect_copy(float *src, float *dest, int m) {
+  for (int i = 0; i < m; i++) {
+    dest[i] = src[i];
+  }
+}
 void vect_add(float *res, float *a, float *b, int m) {
   //#ifdef NAIVE
     for (int i = 0; i < m; i++)
@@ -431,9 +436,10 @@ void vect_add(float *res, float *a, float *b, int m) {
   #endif*/
 }
 void vect_scalar(float *u, float scalar, int n) {
-#ifdef NAIVE
+//#ifdef NAIVE
   for (int i = 0; i < n; i++)
     u[i] *= scalar;
+    /*
 #elif INTEL_MKL
   float *vect_eye = malloc(sizeof(float) * n);
   for (int i = 0; i < n; i++)
@@ -441,5 +447,6 @@ void vect_scalar(float *u, float scalar, int n) {
   cblas_saxpy(n, scalar, vect_eye, 1, u, 1);
   free(vect_eye);
 #endif
+*/
 }
 

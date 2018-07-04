@@ -37,6 +37,7 @@ void vect_prod_mat(Mat *A, float *u, float *res);
 float *vect_prod_mat_trans(Mat *mat, float *u);
 float *vect_divide_by_scalar(float *u, float scalar, int n);
 void vect_substract(float *res, float *u , float *v, int m);
+void vect_copy(float *src, float *dest, int m);
 void vect_scalar(float *u, float scalar, int n);
 void vect_add(float *res, float *a, float *b, int m);
 void compute_fm(float *fm, float *u, float *w, int n, int m);

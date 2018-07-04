@@ -222,7 +222,7 @@ complex *qr_alg_eigen(Mat *A) {/*
   matrix_copy(A, tmp);
   complex *w = malloc(sizeof(complex) * A->n);
   Mat *z = matrix_new(A->m, A->n);
-  LAPACKE_chseqr(LAPACK_ROW_MAJOR, 'E', 'I', A->n, 1, A->n, tmp->data, A->n, w, z->data, A->n);
+  //LAPACKE_chseqr(LAPACK_ROW_MAJOR, 'E', 'I', A->n, 1, A->n, tmp->data, A->n, w, z->data, A->n);
   qsort(w, A->n, sizeof(*w), my_compare);
   matrix_delete(tmp);
   return w;
