@@ -5,7 +5,7 @@ Mat *matrix_new(int m, int n) {
   Mat *res = malloc(sizeof(Mat));
   if (!res)
     return NULL;
-  res->data = calloc(m * n, sizeof(float));
+  res->data = malloc(m * n * sizeof(float));
   if (!res->data)
   {
     free(res);
@@ -30,6 +30,9 @@ Mat *matrix_eye(int m, int n) {
   Mat *res = matrix_new(m, n);
   if (!res)
     return NULL;
+  for (int i = 0; i < m * n; i++) {
+    res->data[i] = 0;
+  }
   for (int i = 0; i < n; i++) {
       res->data[i + (n * i)] = 1;
   }
@@ -65,6 +68,30 @@ float *matrix_diag(Mat *A) {
   return res;
 #endif
 }
+void matrix_mul_bis(Mat *res, Mat *A, Mat *B) {
+    if (A->n != B->m)
+  {
+    printf("Dim Error\n");
+    return;
+  }
+  if (!res) {
+    printf("Matrix Res error\n");
+    return;
+  }
+#ifdef NAIVE
+  for (int i = 0; i < A->n; i++) {
+    for (int j = 0; j < B->m; j++) {
+      float sum = 0.0;
+        for (int k = 0; k < A->n; k++) {
+          sum += A->data[k + (i * A->n)] * B->data[j + (k * B->m)];
+        }
+        res->data[i * A->m + j] = sum;
+      }
+    }
+#elif INTEL_MKL
+  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, A->m, B->n, A->n, 1, A->data, A->n, B->data, B->n, 0, res->data, res->n);
+#endif
+}
 Mat *matrix_mul(Mat *A, Mat *B) {
   if (A->n != B->m)
   {
@@ -94,6 +121,8 @@ Mat *matrix_mul(Mat *A, Mat *B) {
 }
 Mat *matrix_zeros(int m, int n) {
   Mat *res = matrix_new(m, n);
+  for (int i = 0; i < m * n; i++)
+    res->data[i] = 0;
   return res;
 }
 void matrix_add(Mat *A, Mat *B, Mat *res) {

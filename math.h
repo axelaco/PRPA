@@ -16,6 +16,7 @@ void matrix_copy(Mat *src, Mat *dest);
 Mat *matrix_eye(int m, int n);
 Mat *matrix_zeros(int m, int n);
 Mat *matrix_mul(Mat *A, Mat *B);
+void matrix_mul_bis(Mat *res, Mat *A, Mat *B);
 float *matrix_diag(Mat *A);
 void matrix_sub(Mat *A, Mat *B, Mat *res);
 void matrix_add(Mat *A, Mat *B, Mat *res);

@@ -1,7 +1,7 @@
 #include "math.h"
 #include <omp.h> // OpenMP
-#define N 10
-#define K 3
+#define N 100
+#define K 10
 //#include <lapacke.h>
 
 // QSort Algorithm
@@ -57,9 +57,11 @@ void house_apply(Mat *U, Mat *Q) {
     return;
   if (!U)
     return;
+  float *u = NULL;
   for (int j = U->n - 1; j >= 0; j--) {
-    float *u = get_column(U, j);
+    u = get_column(U, j);
     H(u, Q);
+    free(u);
   }
 }
 
@@ -97,10 +99,14 @@ void qr_householder(Mat *A, Mat *R, Mat *Q1) {
     for (int j = (k + 1) * R->m + k; j < R->m * R->n; j+=R->m) {
       R->data[j] = 0;
     }
+    matrix_delete(Rreduce);
+    free(u);
   }
   Mat *Q = matrix_eye(U->m, U->n);
   matrix_copy(Q, Q1);
   house_apply(U,  Q1);
+  matrix_delete(U);
+  matrix_delete(Q);
 }
 
 #ifdef INTEL_MKL
@@ -143,6 +149,7 @@ void lanczos_facto(Mat *A, float *v0, int k, int m, Mat *Vm, Mat *Tm, float *fm)
       vect_substract(tmp, wPrime, v, A->m);
       vect_substract(fm, tmp, vjOld, A->m);
       free(tmp);
+      free(vjOld);
     } else {
       vect_substract(fm, wPrime, v, A->m);
     }
@@ -156,19 +163,21 @@ void lanczos_facto(Mat *A, float *v0, int k, int m, Mat *Vm, Mat *Tm, float *fm)
   vect_mat_copy(Vm, v, m - 1);
   vect_prod_mat(A, v, fm);
   Tm->data[m * m - 1] = vect_dot(fm, v, A->m);
-  puts("Tm:");
-  matrix_print(Tm);
-  puts("Vm:");
-  matrix_print(Vm);
+  free(v);
+  free(wPrime);
 }
 void lanczos_ir(Mat *A, float *v0, int k, int m) {
   Mat *Vm = matrix_zeros(A->n, m);
   Mat *Tm = matrix_zeros(m, m);
   float *fm = malloc(sizeof(float) * A->m);
+  Mat *Qm = NULL;
+  Mat *QT = NULL;
+  Mat *QmT = NULL;
   lanczos_facto(A, v0, 1, m, Vm, Tm, fm);
-  while(1) {
+  int nb_iter = 0;
+  while(nb_iter < 100) {
     float *eigs = qr_alg_eigen(Tm);
-    Mat *Qm = matrix_eye(m, m);
+    Qm = matrix_eye(m, m);
     for (int j = m - k; j >= 0; j--) {
       Mat *mat_tmp = matrix_new(Tm->m, Tm->n);
       Mat *eye = matrix_eye(Tm->n, Tm->n);
@@ -184,15 +193,23 @@ void lanczos_ir(Mat *A, float *v0, int k, int m) {
         intel_mkl_qr(mat_tmp, R, Q);
       #endif
       // Hm = Qj*HmQj
-      Mat *QT = matrix_transpose(Q);
-      Tm = matrix_mul(matrix_mul(QT, Tm), Q);
-      Mat *QmT = matrix_transpose(Qm);
-      Qm = matrix_mul(QmT, Q);
-      puts("Tm:");
-      matrix_print(Tm);
-      puts("Vm:");
-      matrix_print(Vm);
+      QT = matrix_transpose(Q);
+      Mat *tmp_mul = matrix_zeros(QT->m, Tm->n);
+      matrix_mul_bis(tmp_mul, QT, Tm);
+      matrix_mul_bis(Tm, tmp_mul, Q);
+      QmT = matrix_transpose(Qm);
+      matrix_mul_bis(Qm, QmT, Q);
+
+      // delete all temporaries variables
+      matrix_delete(tmp_mul);
+      matrix_delete(mat_tmp);
+      matrix_delete(eye);
+      matrix_delete(R);
+      matrix_delete(Q);
+      matrix_delete(QT);
+      matrix_delete(QmT);
     }
+    free(eigs);
     float *tmp_fm = malloc(sizeof(float) * A->m);
     float *tmp_fm2 = malloc(sizeof(float) * A->m);
 
@@ -201,8 +218,34 @@ void lanczos_ir(Mat *A, float *v0, int k, int m) {
     float *QmK = get_column(Qm, k + 1);
     vect_prod_mat(Vm, QmK, tmp_fm2);
     vect_add(fm, tmp_fm2, tmp_fm, A->m);
-    lanczos_facto(A, get_column(Vm, k), k, m, Vm, Tm, fm);
+    float *Vk = get_column(Vm, k);
+
+    // Recreate value Vm, TM, fm
+    matrix_delete(Vm);
+    matrix_delete(Tm);
+    free(fm);
+
+    Vm = matrix_zeros(A->n, m);
+    Tm = matrix_zeros(m, m);
+    fm = malloc(sizeof(float) * A->m);
+    lanczos_facto(A, Vk, k, m, Vm, Tm, fm);
+
+    // delete all temporary variables
+    free(QmK);
+    matrix_delete(Qm);
+    free(Vk);
+    free(tmp_fm);
+    free(tmp_fm2);
+
+    nb_iter++;
   }
+  puts("Tm:");
+  matrix_print(Tm);
+  puts("Vm:");
+  matrix_print(Vm);
+  matrix_delete(Vm);
+  matrix_delete(Tm);
+  free(fm);
 }
 void arnoldi_iteration(Mat *A, float *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm, float *fm) {
   vect_divide(v0, vect_norm(v0, A->n), A->n);
@@ -300,13 +343,13 @@ float *qr_alg_eigen(Mat *A) {/*
     matrix_delete(Q1);
     return matrix_diag(A0);
     */
-  puts("A");
-  matrix_print(A);
   float *wr = malloc(sizeof(float) * A->n);
   float *wi = malloc(sizeof(float) * A->n);
   Mat *z = matrix_new(A->m, A->n);
   LAPACKE_shseqr(LAPACK_ROW_MAJOR, 'E', 'I', A->n, 1, A->n, A->data, A->n, wr, wi, z->data, A->n);
   qsort(wr, A->n, sizeof(*wr), my_compare);
+  free(wi);
+  matrix_delete(z);
   return wr;
 }
 
@@ -322,10 +365,12 @@ void eigen_values(Mat *A) {
         v[i] /= vNorm;
     }
     vect_print(v, A->n);
-    Mat *Vm = matrix_zeros(A->n, 20);
+    /*Mat *Vm = matrix_zeros(A->n, 20);
     Mat *Tm = matrix_zeros(20, 20);
     float *fm = malloc(sizeof(float) * A->m);
-    lanczos_facto(A, v, 1, 20,  Vm, Tm, fm);
+    */
+    lanczos_ir(A, v, K, 20);//,  Vm, Tm, fm);
+    free(v);
     //iram(A, v, K, 20);
     /*
     
