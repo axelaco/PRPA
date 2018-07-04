@@ -2,7 +2,6 @@
 #include <omp.h> // OpenMP
 #define N 100
 #define K 10
-//#include <lapacke.h>
 
 // QSort Algorithm
 static int my_compare (void const *a, void const *b)

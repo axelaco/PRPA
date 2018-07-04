@@ -1,4 +1,7 @@
 #include "math.h"
+#ifdef NAIVE
+#include <lapacke.h>
+#endif
 // QSort Algorithm
 static int cmp_abs (void const *a, void const *b)
 {
@@ -33,7 +36,14 @@ float *rritz(Mat *Tm, float *mx, float *fm, int k, float nrmfr) {
 // TODO Implement method for NAIVE implem
 float *qr_alg_eigen(Mat *A, Mat *eigVector) {
 #ifdef NAIVE
-
+float *diag = matrix_diag(A);
+  float *off_diag = matrix_off_diag(A);
+  float *WORK = malloc(sizeof(float) * 2 * A->n - 2);
+  int info;
+  LAPACK_ssteqr("I", &A->n, diag, off_diag, eigVector->data, &eigVector->n, WORK, 0);
+  //LAPACKE_shseqr(LAPACK_ROW_MAJOR, 'E', 'I', A->n, 1, A->n, A->data, A->n, wr, wi, z->data, A->n);
+ // free(wi);
+  return diag;
 #elif INTEL_MKL
  // float *wr = malloc(sizeof(float) * A->n);
 //  float *wi = malloc(sizeof(float) * A->n);
