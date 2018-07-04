@@ -39,8 +39,9 @@ float *qr_alg_eigen(Mat *A, Mat *eigVector) {
 float *diag = matrix_diag(A);
   float *off_diag = matrix_off_diag(A);
   float *WORK = malloc(sizeof(float) * 2 * A->n - 2);
+  int n = A->n;
   int info;
-  LAPACK_ssteqr("I", &A->n, diag, off_diag, eigVector->data, &eigVector->n, WORK, 0);
+  LAPACK_ssteqr("I", &n, diag, off_diag, eigVector->data, &n, WORK, &info);
   //LAPACKE_shseqr(LAPACK_ROW_MAJOR, 'E', 'I', A->n, 1, A->n, A->data, A->n, wr, wi, z->data, A->n);
  // free(wi);
   return diag;
