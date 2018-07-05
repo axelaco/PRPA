@@ -1,7 +1,8 @@
 #include "math.h"
 #include <omp.h> // OpenMP
-#define N 100
-#define K 10
+#define N 1000
+#define K 100
+#define M 120
 
 // QSort Algorithm
 static int my_compare (void const *a, void const *b)
@@ -315,10 +316,10 @@ void eigen_values(Mat *A) {
     for (int i = 0; i < A->n; i++) {
         v[i] /= vNorm;
     }
-    vect_print(v, A->n);
-    float *res = lanczos_ir(A, v, K, 20);
+  //  vect_print(v, A->n);
+    float *res = lanczos_ir(A, v, K, M);
     printf("##### Eigen Values: #####\n");
-    qsort(res, 20, sizeof(*res), my_compare);
+    qsort(res, M, sizeof(*res), my_compare);
     for (int i = 0; i < K; i++)
       printf("%8.5f\n", res[i]);
     free(res);
@@ -445,13 +446,13 @@ int main(void) {
   matrix_print(A);
   */
   init_random_matrix_sym(A);
-  matrix_print(A);
+  //matrix_print(A);
   puts("");
   
   float start = omp_get_wtime();
   eigen_values(A);
   float stop = omp_get_wtime();
- // printf("Time : %lf\n", stop-start);
+  printf("Time : %lf\n", stop-start);
   matrix_delete(A);
  
   return 0;
