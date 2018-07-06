@@ -20,10 +20,11 @@ void vecScalar(float *a, float scalar, int block_size, int n);
 void vecCopy(float *src, float *dest, int block_size, int n);
 void triu(float *d_src, float *d_dest, const int m,
    const int n, const int subM);
-
+float *qr_alg_eigen(cusolverDnHandle_t cusolverH, Mat *A);
 void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat *Q);
 Mat *matrix_new(int m, int n);
 Mat *matrix_mul(cublasHandle_t handle, Mat *A, Mat *B);
+void matrix_mul_bis(cublasHandle_t handle, Mat *res, Mat *A, Mat *B);
 Mat *matrix_transpose(cublasHandle_t handle, Mat *A);
 Mat *matrix_zeros(int m, int n);
 Mat *matrix_eye(int m, int n);

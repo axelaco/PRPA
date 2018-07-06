@@ -44,7 +44,10 @@ void lanczos_facto(cublasHandle_t handle, Mat *A, float *v0, int k, int m, Mat *
   free(wPrime);
 }
 
-float *lanczos_ir(Mat *A, float *v0, int k, int m) {
+float *lanczos_ir(cublasHandle_t handle, Mat *A, float *v0, int k, int m) {
+  cusolverDnHandle_t cusolverH = NULL;
+  cublasStatus_t cusolver_status = cusolverDnCreate(&cusolverH);
+  assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
   Mat *Vm = matrix_zeros(A->n, m);
   Mat *Tm = matrix_zeros(m, m);
   float residual = 1;
@@ -53,10 +56,11 @@ float *lanczos_ir(Mat *A, float *v0, int k, int m) {
   Mat *QT = NULL;
   Mat *QmT = NULL;
   float eps = 0.00001;
-  lanczos_facto(A, v0, 1, m, Vm, Tm, fm);
+  lanczos_facto(handle, A, v0, 1, m, Vm, Tm, fm);
   int nb_iter = 0;
-  while(residual > eps || nb_iter < 100) {
-    float *eigs = rritz(Tm, &residual, fm, k, residual);
+  while(residual > eps || nb_iter < 5) {
+    printf("Iteration: %d\n", nb_iter);
+    float *eigs = qr_alg_eigen(cusolverH, Tm);//rritz(Tm, &residual, fm, k, residual);
     Qm = matrix_eye(m, m);
     for (int j = m - k; j >= 0; j--) {
       Mat *mat_tmp = matrix_new(Tm->m, Tm->n);
@@ -67,18 +71,19 @@ float *lanczos_ir(Mat *A, float *v0, int k, int m) {
       matrix_scalar(eye, eigs[j]);
       // H(:,:) - s * I(:,:)
       matrix_sub(Tm, eye, mat_tmp);
-      #ifdef NAIVE
-        qr_householder(mat_tmp, R, Q);
-      #elif INTEL_MKL
-        intel_mkl_qr(mat_tmp, R, Q);
-      #endif
+
+      qr(handle, cusolverH, mat_tmp, R, Q);
       // Hm = Qj*HmQj
-      QT = matrix_transpose(Q);
+
+      printf("Start Transpose\n");
+      QT = matrix_transpose(handle, Q);
       Mat *tmp_mul = matrix_zeros(QT->m, Tm->n);
-      matrix_mul_bis(tmp_mul, QT, Tm);
-      matrix_mul_bis(Tm, tmp_mul, Q);
-      QmT = matrix_transpose(Qm);
-      matrix_mul_bis(Qm, QmT, Q);
+      printf("Start matrix_mul_bis\n");
+      matrix_mul_bis(handle, tmp_mul, QT, Tm);
+      printf("Start matrix_mul_bis 2\n");
+      matrix_mul_bis(handle, Tm, tmp_mul, Q);
+      QmT = matrix_transpose(handle, Qm);
+      matrix_mul_bis(handle, Qm, QmT, Q);
 
       // delete all temporaries variables
       matrix_delete(tmp_mul);
@@ -95,10 +100,10 @@ float *lanczos_ir(Mat *A, float *v0, int k, int m) {
 
     vect_copy(fm, tmp_fm, A->m);
     vect_scalar(tmp_fm, Qm->data[m * k], A->m);
-    float *QmK = get_column(Qm, k + 1);
-    vect_prod_mat(Vm, QmK, tmp_fm2);
+    float *QmK = get_column(handle, Qm, k + 1);
+    vect_prod_mat(handle, Vm, QmK, tmp_fm2);
     vect_add(fm, tmp_fm2, tmp_fm, A->m);
-    float *Vk = get_column(Vm, k);
+    float *Vk = get_column(handle, Vm, k);
 
     // Recreate value Vm, TM, fm
     matrix_delete(Vm);
@@ -108,7 +113,7 @@ float *lanczos_ir(Mat *A, float *v0, int k, int m) {
     Vm = matrix_zeros(A->n, m);
     Tm = matrix_zeros(m, m);
     fm = malloc(sizeof(float) * A->m);
-    lanczos_facto(A, Vk, k, m, Vm, Tm, fm);
+    lanczos_facto(handle, A, Vk, k, m, Vm, Tm, fm);
 
     // delete all temporary variables
     free(QmK);
@@ -121,12 +126,18 @@ float *lanczos_ir(Mat *A, float *v0, int k, int m) {
   }
 
   matrix_delete(Vm);
-  Mat *eigVector = matrix_zeros(Tm->m, Tm->n);
-  float *eigs = qr_alg_eigen(Tm, eigVector);
-  matrix_delete(eigVector);
+  //Mat *eigVector = matrix_zeros(Tm->m, Tm->n);
+  float *eigs = qr_alg_eigen(cusolverH, Tm);//, eigVector);
+  //matrix_delete(eigVector);
   matrix_delete(Tm);
   free(fm);
+
+  if (handle ) cublasDestroy(handle);
+  if (cusolverH) cusolverDnDestroy(cusolverH);
+
+  cudaDeviceReset();
   return eigs;
+  //return NULL;
 }
 void eigen_values(Mat *A) {
 
@@ -140,7 +151,7 @@ void eigen_values(Mat *A) {
     float vNorm =  vect_norm(handle, v, A->n);
     for (int i = 0; i < A->n; i++) {
         v[i] /= vNorm;
-    }
+    }/*
     Mat *Vm = matrix_zeros(A->n, M);
     Mat *Tm = matrix_zeros(M, M);
     float *fm = malloc(sizeof(float) * A->m);
@@ -150,15 +161,14 @@ void eigen_values(Mat *A) {
     matrix_print(Vm);
     puts("Tm:");
     matrix_print(Tm);
-
-/*
-    float *res = lanczos_ir(A, v, K, M);
+*/
+    float *res = lanczos_ir(handle, A, v, K, M);
     printf("##### Eigen Values: #####\n");
-    qsort(res, M, sizeof(*res), my_compare);
+  //  qsort(res, M, sizeof(*res), my_compare);
     for (int i = 0; i < K; i++)
       printf("%8.5f\n", res[i]);
     free(res);
-  */ free(v);
+    free(v);
 }
 void init_random_matrix_sym(Mat *A) {
   float tmp;

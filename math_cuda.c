@@ -3,6 +3,19 @@
 
 #define BLOCK_SIZE 256
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
+
+static int cmp_abs (void const *a, void const *b)
+{
+   /* definir des pointeurs type's et initialise's
+      avec les parametres */
+   float const *pa = a;
+   float const *pb = b;
+
+   /* evaluer et retourner l'etat de l'evaluation (tri croissant) */
+   return abs(*pa) - abs(*pb);
+}
+
+
 Mat *matrix_new(int m, int n) {
   Mat *res = malloc(sizeof(Mat));
   if (!res)
@@ -17,6 +30,72 @@ Mat *matrix_new(int m, int n) {
   return res;
 }
 
+float *qr_alg_eigen(cusolverDnHandle_t cusolverH, Mat *A) {
+  cusolverStatus_t cusolver_status = CUSOLVER_STATUS_SUCCESS;
+  cudaError_t cudaStat1 = cudaSuccess;
+  cudaError_t cudaStat2 = cudaSuccess;
+  cudaError_t cudaStat3 = cudaSuccess;
+  const int m = A->m;
+  const int lda = m;
+  float V[lda*m]; // eigenvectors
+  float *W = malloc(sizeof(float) * m); // eigenvalues
+  float *d_A = NULL;
+  float *d_W = NULL;
+  int *devInfo = NULL;
+  float *d_work = NULL;
+  int  lwork = 0;
+
+  int info_gpu = 0;
+
+  // step 1: create cusolver/cublas handle
+    cusolver_status = cusolverDnCreate(&cusolverH);
+    assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
+
+  // step 2: copy A and W to device
+    cudaStat1 = cudaMalloc ((void**)&d_A, sizeof(float) * lda * m);
+    cudaStat2 = cudaMalloc ((void**)&d_W, sizeof(float) * m);
+    cudaStat3 = cudaMalloc ((void**)&devInfo, sizeof(int));
+    assert(cudaSuccess == cudaStat1);
+    assert(cudaSuccess == cudaStat2);
+    assert(cudaSuccess == cudaStat3);
+
+    cudaStat1 = cudaMemcpy(d_A, A->data, sizeof(float) * lda * m, cudaMemcpyHostToDevice);
+    assert(cudaSuccess == cudaStat1);
+  // step 3: query working space of syevd
+    cusolverEigMode_t jobz = CUSOLVER_EIG_MODE_VECTOR; // compute eigenvalues and eigenvectors.
+    cublasFillMode_t uplo = CUBLAS_FILL_MODE_LOWER;
+    cusolver_status = cusolverDnSsyevd_bufferSize(cusolverH, jobz, uplo, m, d_A,
+            lda, d_W, &lwork);
+    assert (cusolver_status == CUSOLVER_STATUS_SUCCESS);
+
+    cudaStat1 = cudaMalloc((void**)&d_work, sizeof(float)*lwork);
+    assert(cudaSuccess == cudaStat1);
+  // step 4: compute spectrum
+    cusolver_status = cusolverDnSsyevd(cusolverH, jobz, uplo, m, d_A, lda,
+            d_W, d_work, lwork, devInfo);
+    cudaStat1 = cudaDeviceSynchronize();
+    assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
+    assert(cudaSuccess == cudaStat1);
+
+    cudaStat1 = cudaMemcpy(W, d_W, sizeof(float)*m, cudaMemcpyDeviceToHost);
+    cudaStat2 = cudaMemcpy(V, d_A, sizeof(float)*lda*m, cudaMemcpyDeviceToHost);
+    cudaStat3 = cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+    assert(cudaSuccess == cudaStat1);
+    assert(cudaSuccess == cudaStat2);
+    assert(cudaSuccess == cudaStat3);
+
+    printf("after syevd: info_gpu = %d\n", info_gpu);
+    assert(0 == info_gpu);
+
+    // free resources
+    if (d_A    ) cudaFree(d_A);
+    if (d_W    ) cudaFree(d_W);
+    if (devInfo) cudaFree(devInfo);
+    if (d_work ) cudaFree(d_work);
+    qsort(W, A->m, sizeof(*W), cmp_abs);
+    return W;
+
+}
 
 float *create_gpu_matrix(float *cpu_data, int m, int n) {
   cudaError_t cudaStat;
