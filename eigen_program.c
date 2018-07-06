@@ -77,15 +77,15 @@ void qr_householder(Mat *A, Mat *R, Mat *Q1) {
   if (!Q1)
     return;
   matrix_copy(A, R);
-  Mat *U = matrix_zeros(A->m, A->n);  
+  Mat *U = matrix_zeros(A->m, A->n);
   if (!U || !R)
     return;
 
   float *u = NULL;
 
   for (int k = 0; k < A->n - 1; k++) {
-    u = get_column_start(R, k);  
-    house_helper(u, A->n - k);  
+    u = get_column_start(R, k);
+    house_helper(u, A->n - k);
     // U(j:m, j) = u
     vect_mat_copy_cond(U, u, k, 1);
     // R(j:m,j:n)
@@ -119,8 +119,8 @@ void intel_mkl_qr(Mat *Ar, Mat *R, Mat *Q) {
 
   matrix_copy(Ar, Q);
   // Retrieve R tri upper
-  LAPACKE_slacpy(LAPACK_ROW_MAJOR, 'U', Ar->m, Ar->n, Ar->data, Ar->m, R->data, Ar->n);  
-  // Retrieve Q 
+  LAPACKE_slacpy(LAPACK_ROW_MAJOR, 'U', Ar->m, Ar->n, Ar->data, Ar->m, R->data, Ar->n);
+  // Retrieve Q
   LAPACKE_sorgqr(LAPACK_ROW_MAJOR, Ar->m, Ar->n, Ar->m, Q->data, Ar->m, tau);
 }
 #endif
@@ -262,7 +262,7 @@ void arnoldi_iteration(Mat *A, float *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm,
   float *res = NULL;
   for (int j = k - 1; j < MAX_ITER; j++) {
       //printf("%d Ite\n", j);
-      if (j == 0) {      
+      if (j == 0) {
         // w = A * v0
         vect_prod_mat(A, v0, w);
         // Vm(:, j) = v0
@@ -282,7 +282,7 @@ void arnoldi_iteration(Mat *A, float *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm,
 
         // Hm(j, j − 1) = ||fm||
         Hm->data[j * Hm->n + (j-1)] = vect_norm(fm, A->n);
-        
+
         Mat *VmReduce = matrix_reduce(Vm, j + 1);
         // h = Vm(:,1 : j).T ∗ w
 
@@ -307,7 +307,7 @@ void arnoldi_iteration(Mat *A, float *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm,
 }
 
 void eigen_values(Mat *A) {
-  
+
     int nb_iter = 0;
     float *v = calloc(A->n, sizeof(float));
     for (int i = 0; i < A->n - 1; i++)
@@ -368,11 +368,11 @@ void iram(Mat *A, float *v0, int k, int m) {
     vect_prod_mat(Vm, get_column(Qm, k + 1), fm_tmp);
 
     vect_scalar(fm_tmp, Hm->data[(k+1) * k], A->m);
-    vect_scalar(fm, Qm->data[m * k], A->m);    
-    
+    vect_scalar(fm, Qm->data[m * k], A->m);
+
     vect_add(fm, fm_tmp, fm, A->m);
     Mat *QmReduce = matrix_reduce(Qm, k);
-    
+
     // Vm(::) * Qm(:,1:k)
     Mat *tmp_2 = matrix_mul(Vm, QmReduce);
 
@@ -385,7 +385,7 @@ void iram(Mat *A, float *v0, int k, int m) {
 }
 float in[][3] = {
     {1,2,3},
-    {2,2,4},  
+    {2,2,4},
     {3,4,3}
 };
 float in2[][6] = {
@@ -395,7 +395,7 @@ float in2[][6] = {
     {8,28,33,17,10,15},
     {30,5,34,12,14,16},
     {4,36,29,13,18,11},
-};  
+};
 void init_random_matrix(Mat *A) {
   float tmp;
   srand(10);
@@ -411,7 +411,7 @@ void init_random_matrix_sym(Mat *A) {
     for (int j = 0; j < A->n; j++) {
       tmp = (float) (rand() % 100);
       A->data[A->m * i + j] = tmp;
-      A->data[A->n * j + i] = tmp; 
+      A->data[A->n * j + i] = tmp;
     }
   }
 }
@@ -423,7 +423,7 @@ void init_random_matrix_sym(Mat *A) {
  -22.2301902770996094,
  -22.2301902770996094,
  -9.7979869842529297,
- -0.0000078366610978, 
+ -0.0000078366610978,
  9.7973051071166992,
  27.0011253356933594,
  5.0293035507202148,
@@ -440,7 +440,7 @@ void init_random_matrix_sym(Mat *A) {
 int main(void) {
 
   int tmp;
-  Mat *A = matrix_new(N, N);  
+  Mat *A = matrix_new(N, N);
   /*for (int i = 0; i < N * N; i++)
     A->data[i] = in[i / N][i % N];
   matrix_print(A);
@@ -448,15 +448,12 @@ int main(void) {
   init_random_matrix_sym(A);
   //matrix_print(A);
   puts("");
-  
+
   float start = omp_get_wtime();
   eigen_values(A);
   float stop = omp_get_wtime();
   printf("Time : %lf\n", stop-start);
   matrix_delete(A);
- 
+
   return 0;
 }
-
-
-

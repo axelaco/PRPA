@@ -1,24 +1,26 @@
 #include "math_cuda.h"
-
-void lanczos_facto(Mat *A, float *v0, int k, int m, Mat *Vm, Mat *Tm, float *fm) {
+#define N 10
+#define K 5
+#define M 20
+void lanczos_facto(cublasHandle_t handle, Mat *A, float *v0, int k, int m, Mat *Vm, Mat *Tm, float *fm) {
   float b1 = 0;
   float *wPrime = malloc(sizeof(float) * A->m);
   float *v = malloc(sizeof(float) * A->m);
   vect_copy(v0, v, A->m);
   for (int j = k - 1; j < m - 1; j++) {
     // wj' = A * vj
-    vect_prod_mat(A, v, wPrime);
+    vect_prod_mat(handle, A, v, wPrime);
 
     // Vm(:,j) = vj
-    vect_mat_copy(Vm, v, j);
+    vect_mat_copy(handle, Vm, v, j);
 
     //T(j,j) = wj'.T * vj
-    float a1 = vect_dot(wPrime, v, A->m);
+    float a1 = vect_dot(handle, wPrime, v, A->m);
     Tm->data[(Tm->m * j) + j]  = a1;
     // wj = wj' - T(j,j)*vj - Bj*vj-1
     vect_scalar(v, a1, A->m);
     if (j > 0) {
-      float* vjOld = get_column(Vm, j - 1);
+      float* vjOld = get_column(handle, Vm, j - 1);
       vect_scalar(vjOld, b1, A->m);
       float *tmp = malloc(sizeof(float) * A->m);
       vect_substract(tmp, wPrime, v, A->m);
@@ -29,18 +31,19 @@ void lanczos_facto(Mat *A, float *v0, int k, int m, Mat *Vm, Mat *Tm, float *fm)
       vect_substract(fm, wPrime, v, A->m);
     }
     // Bj = ||wj||
-    b1 = vect_norm(fm, A->m);
+    b1 = vect_norm(handle, fm, A->m);
     Tm->data[(Tm->m * j) + j + 1] = b1;
     Tm->data[Tm->m * (j + 1) + j] = b1;
     free(v);
     v = vect_divide_by_scalar(fm, b1, A->m);
   }
-  vect_mat_copy(Vm, v, m - 1);
-  vect_prod_mat(A, v, fm);
-  Tm->data[m * m - 1] = vect_dot(fm, v, A->m);
+  vect_mat_copy(handle, Vm, v, m - 1);
+  vect_prod_mat(handle, A, v, fm);
+  Tm->data[m * m - 1] = vect_dot(handle, fm, v, A->m);
   free(v);
   free(wPrime);
 }
+
 float *lanczos_ir(Mat *A, float *v0, int k, int m) {
   Mat *Vm = matrix_zeros(A->n, m);
   Mat *Tm = matrix_zeros(m, m);
@@ -124,4 +127,65 @@ float *lanczos_ir(Mat *A, float *v0, int k, int m) {
   matrix_delete(Tm);
   free(fm);
   return eigs;
+}
+void eigen_values(Mat *A) {
+
+    int nb_iter = 0;
+    float *v = calloc(A->n, sizeof(float));
+    cublasHandle_t handle = NULL;
+    cublasStatus_t cublas_status = cublasCreate(&handle);
+    assert(CUBLAS_STATUS_SUCCESS == cublas_status);
+    for (int i = 0; i < A->n - 1; i++)
+      v[i] = 1;
+    float vNorm =  vect_norm(handle, v, A->n);
+    for (int i = 0; i < A->n; i++) {
+        v[i] /= vNorm;
+    }
+    Mat *Vm = matrix_zeros(A->n, M);
+    Mat *Tm = matrix_zeros(M, M);
+    float *fm = malloc(sizeof(float) * A->m);
+    vect_print(v, A->n);
+    lanczos_facto(handle, A, v, 1, M, Vm, Tm, fm);
+    puts("VM:");
+    matrix_print(Vm);
+    puts("Tm:");
+    matrix_print(Tm);
+
+/*
+    float *res = lanczos_ir(A, v, K, M);
+    printf("##### Eigen Values: #####\n");
+    qsort(res, M, sizeof(*res), my_compare);
+    for (int i = 0; i < K; i++)
+      printf("%8.5f\n", res[i]);
+    free(res);
+  */ free(v);
+}
+void init_random_matrix_sym(Mat *A) {
+  float tmp;
+  srand(10);
+  for (int i = 0; i < A->m; i++) {
+    for (int j = 0; j < A->n; j++) {
+      tmp = (float) (rand() % 100);
+      A->data[A->m * i + j] = tmp;
+      A->data[A->n * j + i] = tmp;
+    }
+  }
+}
+
+int main(void) {
+
+  int tmp;
+  Mat *A = matrix_new(N, N);
+  /*for (int i = 0; i < N * N; i++)
+    A->data[i] = in[i / N][i % N];
+  matrix_print(A);
+  */
+  init_random_matrix_sym(A);
+  matrix_print(A);
+  puts("");
+
+  eigen_values(A);
+  matrix_delete(A);
+
+  return 0;
 }

@@ -28,8 +28,7 @@ float *create_gpu_matrix(float *cpu_data, int m, int n) {
       printf ("%d device memory allocation failed for cpu_data", cudaStat);
       return NULL;
   }
-  stat = cublasSetMatrix(m, n, sizeof(*cpu_data),
-  cpu_data, m, gpu_mat_A, m);
+  stat = cudaMemcpy(gpu_mat_A, cpu_data, sizeof(float) * m * n, cudaMemcpyHostToDevice);
   if (stat != CUBLAS_STATUS_SUCCESS) {
       printf ("data download failed for Matrix");
       cudaFree (gpu_mat_A);
@@ -80,9 +79,6 @@ void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat
         int lwork = 0;
 
         int info_gpu = 0;
-
-        const float h_one = 1;
-        const float h_minus_one = -1;
 
 
     // step 2: copy A and B to device
@@ -625,8 +621,6 @@ void vect_add(float *res, float *u, float *v, int m) {
 void vect_mat_copy(cublasHandle_t handle, Mat *A, float *u, int col) {
   float *gpu_mat_A;
   float *gpu_vect_u;
-  if (col > 0)
-    col -= 1;
   gpu_mat_A = create_gpu_matrix(A->data, A->m, A->n);
   if (!gpu_mat_A) {
     printf("vect_mat_copy: Error in allocation of gpu_mat_A\n");
@@ -642,7 +636,8 @@ void vect_mat_copy(cublasHandle_t handle, Mat *A, float *u, int col) {
   cublasStatus_t cublaStat = cublasScopy(handle, A->m, gpu_vect_u, 1,
     gpu_mat_A + (A->m * col), 1);
 
-  cublaStat = cublasGetMatrix(A->m, A->n, sizeof(*A->data), gpu_mat_A, A->m, A->data, A->m);
+  cublaStat = cudaMemcpy(A->data, gpu_mat_A, sizeof(float) * A->m * A->n, cudaMemcpyDeviceToHost);
+//  cublaStat = cublasGetMatrix(A->m, A->n, sizeof(*A->data), gpu_mat_A, A->m, A->data, A->m);
   if (cublaStat != cudaSuccess) {
       printf ("vect_mat_copy: %d device memory upload failed for res", cublaStat);
   }
@@ -684,9 +679,9 @@ void vect_print(float *u, int n) {
 }
 void matrix_print(Mat *A) {
   for (int j = 0; j < A->n; j++) {
-    for (int i = 0; i < A->m; i++) {
-      printf("%.5f ", A->data[IDX2C(j,i,A->m)]);
-    }
-    printf("\n");
-  }
+       for (int i = 0; i < A->m; i++) {
+           printf ("%8.5f ", A->data[IDX2C(i,j,A->m)]);
+       }
+       printf ("\n");
+   }
 }
