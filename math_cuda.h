@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 #include <cusolverDn.h>
-#include "cublas_v2.h"
+#include <assert.h>
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
 
 typedef struct mat_ {
@@ -17,11 +18,15 @@ void vecAdd(float *a, float *b, float *c, int block_size, int n);
 void vecSub(float *a, float *b, float *c, int block_size, int n);
 void vecScalar(float *a, float scalar, int block_size, int n);
 void vecCopy(float *src, float *dest, int block_size, int n);
+void triu(float *d_src, float *d_dest, const int m,
+   const int n, const int subM);
 
-void qr(cusolverDnHandle_t handle, Mat *A, Mat *R, Mat *Q);
+void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat *Q);
 Mat *matrix_new(int m, int n);
 Mat *matrix_mul(cublasHandle_t handle, Mat *A, Mat *B);
 Mat *matrix_transpose(cublasHandle_t handle, Mat *A);
+Mat *matrix_zeros(int m, int n);
+Mat *matrix_eye(int m, int n);
 void matrix_delete(Mat *A);
 void matrix_sub(Mat *A, Mat *B, Mat *res);
 void matrix_print(Mat *A);

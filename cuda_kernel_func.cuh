@@ -34,3 +34,16 @@ __global__ void vecCopy_kernel(float *src, float *dest, int n) {
   if (id < n)
     dest[id] = src[id];
 }
+
+__global__ void triu_kernel(float *d_src,
+                                  float *d_dest,
+                            const int M, const int N) {
+    const int i = threadIdx.x + blockIdx.x*blockDim.x;
+    const int j = threadIdx.y + blockIdx.y*blockDim.y;
+    if ((i * j) < M * N) {
+      if (i > j)
+        d_dest[j * N + i] = 0;
+      else
+        d_dest[j * N + i] = d_src[j * N + i];
+    }
+}

@@ -56,49 +56,156 @@ float *create_gpu_vector(float *cpu_data, int n) {
   }
   return gpu_vect_A;
 }
-void qr(cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat *Q) {
+void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat *Q) {
   if (!A || !R || !Q)
     return;
-  float *d_A = NULL; // linear memory of GPU
-  float *d_tau = NULL; // linear memory of GPU
-  int *devInfo = NULL; // info in gpu (device copy)
-  float *d_work = NULL;
-  int  lwork = 0;
-  int info_gpu = 0;
+    cublasStatus_t cublas_status = CUBLAS_STATUS_SUCCESS;
+    cusolverStatus_t cusolver_status = CUSOLVER_STATUS_SUCCESS;
+    cudaError_t cudaStat1 = cudaSuccess;
+    cudaError_t cudaStat2 = cudaSuccess;
+    cudaError_t cudaStat3 = cudaSuccess;
+    cudaError_t cudaStat4 = cudaSuccess;
+    const int m = A->m;
+    const int n = A->n;
+    const int lda = m;
+        float *d_A = NULL;
+        float *d_tau = NULL;
+        int *devInfo = NULL;
+        float *d_work = NULL;
 
-  cudaError_t cudaStat1 = cudaMalloc ((void**)&d_tau, sizeof(double) * A->m);
-  if (cudaStat1 != cudaSuccess) {
-    printf("qr: %d error in allocation of d_tau\n", cudaStat1);
-    return;
-  }
-  cudaError_t cudaStat2 = cudaMalloc ((void**)&devInfo, sizeof(int));
-  d_A = create_gpu_matrix(A->data, A->m, A->n);
-  cusolverStatus_t cusolver_status = cusolverDnSgeqrf_bufferSize(
-       cusolverH,
-       A->m,
-       A->n,
-       d_A,
-       A->m,
-       &lwork);
-  cudaStat1 = cudaMalloc((void**)&d_work, sizeof(double)*lwork);
-  if (cudaStat1 != cudaSuccess) {
-    printf("qr: error in allocation d_work\n");
-  }
-  cusolver_status = cusolverDnSgeqrf(
-     cusolverH,
-     A->m,
-     A->n,
-     d_A,
-     A->m,
-     d_tau,
-     d_work,
-     lwork,
-     devInfo);
-  cudaStat1 = cudaDeviceSynchronize();
-  cudaFree(d_tau);
-  cudaFree(devInfo);
-  cudaFree(d_work);
+        float *d_R = NULL;
 
+        int lwork_geqrf = 0;
+        int lwork_orgqr = 0;
+        int lwork = 0;
+
+        int info_gpu = 0;
+
+        const float h_one = 1;
+        const float h_minus_one = -1;
+
+
+    // step 2: copy A and B to device
+        cudaStat1 = cudaMalloc ((void**)&d_A  , sizeof(float)*lda*n);
+        cudaStat2 = cudaMalloc ((void**)&d_tau, sizeof(float)*n);
+        cudaStat3 = cudaMalloc ((void**)&devInfo, sizeof(int));
+        cudaStat4 = cudaMalloc ((void**)&d_R  , sizeof(float)*n*n);
+        assert(cudaSuccess == cudaStat1);
+        assert(cudaSuccess == cudaStat2);
+        assert(cudaSuccess == cudaStat3);
+        assert(cudaSuccess == cudaStat4);
+
+        cudaStat1 = cudaMemcpy(d_A, A->data, sizeof(float)*lda*n, cudaMemcpyHostToDevice);
+        assert(cudaSuccess == cudaStat1);
+        // step 3: query working space of geqrf and orgqr
+            cusolver_status = cusolverDnSgeqrf_bufferSize(
+                cusolverH,
+                m,
+                n,
+                d_A,
+                lda,
+                &lwork_geqrf);
+            assert (cusolver_status == CUSOLVER_STATUS_SUCCESS);
+            cusolver_status = cusolverDnSorgqr_bufferSize(
+                cusolverH,
+                m,
+                n,
+                n,
+                d_A,
+                lda,
+                d_tau,
+                &lwork_orgqr);
+            assert (cusolver_status == CUSOLVER_STATUS_SUCCESS);
+        // lwork = max(lwork_geqrf, lwork_orgqr)
+            lwork = (lwork_geqrf > lwork_orgqr)? lwork_geqrf : lwork_orgqr;
+
+            cudaStat1 = cudaMalloc((void**)&d_work, sizeof(float)*lwork);
+            assert(cudaSuccess == cudaStat1);
+
+        // step 4: compute QR factorization
+            cusolver_status = cusolverDnSgeqrf(
+                cusolverH,
+                m,
+                n,
+                d_A,
+                lda,
+                d_tau,
+                d_work,
+                lwork,
+                devInfo);
+            cudaStat1 = cudaDeviceSynchronize();
+            assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
+            assert(cudaSuccess == cudaStat1);
+
+            // check if QR is successful or not
+            cudaStat1 = cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+            assert(cudaSuccess == cudaStat1);
+
+            printf("after geqrf: info_gpu = %d\n", info_gpu);
+            assert(0 == info_gpu);
+            cudaError_t cudaError = cudaMalloc((void**)&d_R, sizeof(float) *  R->m * R->n);
+            assert(cudaSuccess == cudaError);
+            triu(d_A, d_R, A->m, A->m, A->n);
+            cudaStat1 = cudaDeviceSynchronize();
+            assert(cudaSuccess == cudaStat1);
+            cudaStat1 = cudaMemcpy(R->data, d_R, sizeof(float)*n*n, cudaMemcpyDeviceToHost);
+            assert(cudaSuccess == cudaStat1);
+        // step 5: compute Q
+            cusolver_status= cusolverDnSorgqr(
+                cusolverH,
+                m,
+                n,
+                n,
+                d_A,
+                lda,
+                d_tau,
+                d_work,
+                lwork,
+                devInfo);
+            cudaStat1 = cudaDeviceSynchronize();
+            assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
+            assert(cudaSuccess == cudaStat1);
+            // check if QR is good or not
+            cudaStat1 = cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+            assert(cudaSuccess == cudaStat1);
+
+            printf("after orgqr: info_gpu = %d\n", info_gpu);
+            assert(0 == info_gpu);
+
+            cudaStat1 = cudaMemcpy(Q->data, d_A, sizeof(float)*lda*n, cudaMemcpyDeviceToHost);
+            assert(cudaSuccess == cudaStat1);
+
+
+
+            // free resources
+        if (d_A    ) cudaFree(d_A);
+        if (d_tau  ) cudaFree(d_tau);
+        if (devInfo) cudaFree(devInfo);
+        if (d_work ) cudaFree(d_work);
+        if (d_R    ) cudaFree(d_R);
+
+        if (handle ) cublasDestroy(handle);
+        if (cusolverH) cusolverDnDestroy(cusolverH);
+
+        cudaDeviceReset();
+}
+Mat *matrix_eye(int m, int n) {
+  Mat *A = matrix_new(m, n);
+  for (int j = 0; j < n; j++) {
+      for (int i = 0; i < m; i++) {
+          if (i == j)
+            A->data[IDX2C(i,j,m)] = 1;
+          else
+            A->data[IDX2C(i,j,m)] = 0;
+      }
+  }
+  return A;
+}
+Mat *matrix_zeros(int m, int n) {
+  Mat *res = matrix_new(m, n);
+  for (int i = 0;i < m * n; i++)
+    res->data[i] = 0;
+  return res;
 }
 Mat *matrix_mul(cublasHandle_t handle, Mat *A, Mat *B) {
   float *gpu_mat_A;
