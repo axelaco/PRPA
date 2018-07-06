@@ -192,14 +192,14 @@ void matrix_add(Mat *A, Mat *B, Mat *res) {
   if (!gpu_mat_B) {
     printf("Matrix Sub: Error in gpu_mat_B creation\n");
   }
-  cublasStatus_t cudaStat = cudaMalloc((void**)&gpu_mat_res, res->m * res->n * sizeof(float));
-  if (cudaStat != cudaSuccess) {
-      printf ("%d device memory allocation failed for cpu_data", cudaStat);
+  cudaError_t cudaError = cudaMalloc((void**)&gpu_mat_res, res->m * res->n * sizeof(float));
+  if (cudaError != cudaSuccess) {
+      printf ("%d device memory allocation failed for cpu_data", cudaError);
   }
 
   vecAdd(gpu_mat_A, gpu_mat_B, gpu_mat_res, BLOCK_SIZE, A->m * A->n);
   cudaThreadSynchronize();
-  cudaStat = cublasGetMatrix(res->m, res->n, sizeof(*res->data), gpu_mat_res, res->m, res->data, res->m);
+  cublasStatus_t cudaStat = cublasGetMatrix(res->m, res->n, sizeof(*res->data), gpu_mat_res, res->m, res->data, res->m);
   if (cudaStat != cudaSuccess) {
       printf ("%d device memory upload failed for res", cudaStat);
   }
@@ -208,6 +208,31 @@ void matrix_add(Mat *A, Mat *B, Mat *res) {
   cudaFree(gpu_mat_B);
   cudaFree(gpu_mat_res);
 
+}
+Mat *matrix_transpose(cublasHandle_t handle, Mat *A) {
+  float *gpu_mat_A;
+  float *gpu_mat_res;
+  Mat *res = matrix_new(A->n, A->m);
+  gpu_mat_A = create_gpu_matrix(A->data, A->m, A->n);
+  if (!gpu_mat_A) {
+    printf("matrix_transpose: Error in allocation of gpu_mat_A\n");
+  }
+  float alpha = 1;
+  float beta = 0;
+  cudaError_t cudaError = cudaMalloc((void**)&gpu_mat_res, sizeof(float) * A->m * A->n);
+  if (cudaError != cudaSuccess) {
+    printf("matrix_transpose: Error in allocation of gpu_mat_res\n");
+  }
+  cublasStatus_t cudaStat = cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, A->m,
+  A->n, &alpha, gpu_mat_A, A->n, &beta, gpu_mat_A, A->n, gpu_mat_res, A->m);
+
+  cudaStat = cublasGetMatrix(res->m, res->n, sizeof(*A->data), gpu_mat_res, res->m, res->data, res->m);
+  if (cudaStat != cudaSuccess) {
+      printf ("matrix_transpose: %d device memory upload failed for res", cudaStat);
+  }
+  cudaFree(gpu_mat_A);
+  cudaFree(gpu_mat_res);
+  return res;
 }
 void matrix_scalar(Mat *A, float scalar) {
   float *gpu_mat_A;
@@ -222,7 +247,7 @@ void matrix_scalar(Mat *A, float scalar) {
   cudaFree(gpu_mat_A);
 }
 
-void vect_copy(cublasHandle_t handle, float *src, float *dest, int m) {
+void vect_copy(float *src, float *dest, int m) {
   float *gpu_src;
   float *gpu_dest;
   gpu_src = create_gpu_vector(src, m);
@@ -230,11 +255,11 @@ void vect_copy(cublasHandle_t handle, float *src, float *dest, int m) {
   if (cudaStat != cudaSuccess) {
     printf("vect_copy: Error in allocation of gpu_dest\n");
   }
-  vecCopy(gpu_src, gpu_dest, BLOCK_SIZE,m);
-
-  cudaStat = cublasGetVector(m, m, gpu_dest, 1, dest, 1);
-  if (cudaStat != cudaSuccess) {
-    printf ("vect_copy: %d device memory upload failed for res", cudaStat);
+  vecCopy(gpu_src, gpu_dest, BLOCK_SIZE, m);
+  cudaThreadSynchronize();
+  cudaError_t error = cudaMemcpy(dest, gpu_dest, m * sizeof(float), cudaMemcpyDeviceToHost);
+  if (error != cudaSuccess) {
+    printf ("vect_copy: %d device memory upload failed for res", error);
   }
   cudaFree(gpu_src);
   cudaFree(gpu_dest);
@@ -252,11 +277,14 @@ void vect_prod_mat(cublasHandle_t handle, Mat *A, float *u, float *res) {
   gpu_vect_u = create_gpu_vector(u, A->m);
   if (!gpu_vect_u)
   {
+    cudaFree(gpu_mat_A);
     printf("vect_prod_mat: Error in allocation of gpu_vect_u\n");
 
   }
   cublasStatus_t cudaStat = cudaMalloc((void **)&gpu_vect_res, A->m * sizeof(float));
   if (cudaStat != cudaSuccess) {
+    cudaFree(gpu_mat_A);
+    cudaFree(gpu_vect_u);
     printf("vect_prod_mat: Error in allocation of gpu_dest\n");
   }
   float alpha = 1;
@@ -264,65 +292,55 @@ void vect_prod_mat(cublasHandle_t handle, Mat *A, float *u, float *res) {
   cudaStat = cublasSgemv(handle, CUBLAS_OP_N, A->m, A->n, &alpha,
     gpu_mat_A, A->m, gpu_vect_u, 1, &beta, gpu_vect_res, 1);
   if (cudaStat != cudaSuccess) {
+    cudaFree(gpu_mat_A);
+    cudaFree(gpu_vect_u);
+    cudaFree(gpu_vect_res);
     printf("vect_prod_mat: Error in cblas_sgemv function\n");
   }
-
-  cudaStat = cublasGetVector(A->m, A->m, gpu_vect_res, 1, res, 1);
-  if (cudaStat != cudaSuccess) {
-    printf ("vect_copy: %d device memory upload failed for res", cudaStat);
+  cudaError_t cudaError = cudaMemcpy(res, gpu_vect_res, sizeof(float) * A->m, cudaMemcpyDeviceToHost);
+  if (cudaError != cudaSuccess) {
+    cudaFree(gpu_mat_A);
+    cudaFree(gpu_vect_u);
+    cudaFree(gpu_vect_res);
+    printf ("vect_copy: %d device memory upload failed for res", cudaError);
   }
   cudaFree(gpu_mat_A);
   cudaFree(gpu_vect_u);
   cudaFree(gpu_vect_res);
 }
 
-float *vect_dot(cublasHandle_t handle, float *u, float *v, int n) {
+float vect_dot(cublasHandle_t handle, float *u, float *v, int n) {
   float *gpu_vect_u;
   float *gpu_vect_v;
-  float *gpu_vect_res;
-  float *res = malloc(sizeof(float) * n);
+  float res;
+
   gpu_vect_u = create_gpu_vector(u, n);
   if (!gpu_vect_u) {
     printf("vect_dot: Error in allocation of gpu_vect_u\n");
+    return -1;
   }
   gpu_vect_v = create_gpu_vector(v, n);
   if (!gpu_vect_v) {
     printf("vect_dot: Error in allocation of gpu_vect_v\n");
     cudaFree(gpu_vect_u);
-    return NULL;
+    return -1;
   }
-
-  cublasStatus_t cudaStat = cudaMalloc((void**)&gpu_vect_res, n * sizeof(float));
-
-  if (cudaStat != cudaSuccess) {
-    printf ("vect_dot: %d Error in allocation of gpu_vect_res\n", cudaStat);
-    cudaFree(gpu_vect_u);
-    cudaFree(gpu_vect_v);
-    return NULL;
-
-  }
-
-  cudaStat = cublasSdot(handle, n, gpu_vect_u, 1, gpu_vect_v, 1, gpu_vect_res);
+  cublasStatus_t cudaStat = cublasSdot(handle, n, gpu_vect_u, 1, gpu_vect_v, 1, &res);
   if (cudaStat != cudaSuccess) {
     printf ("vect_dot: %d Error in cublasSdot function\n", cudaStat);
     cudaFree(gpu_vect_u);
     cudaFree(gpu_vect_v);
-    cudaFree(gpu_vect_res);
-    return NULL;
+    return -1;
   }
-
-  cudaStat = cublasGetVector(n, n, gpu_vect_res, 1, res, 1);
 
   if (cudaStat != cudaSuccess) {
     printf ("vect_dot: %d device memory upload failed for res", cudaStat);
     cudaFree(gpu_vect_u);
     cudaFree(gpu_vect_v);
-    cudaFree(gpu_vect_res);
-    return NULL;
+    return -1;
   }
   cudaFree(gpu_vect_u);
   cudaFree(gpu_vect_v);
-  cudaFree(gpu_vect_res);
 
   return res;
 }
@@ -336,9 +354,10 @@ void vect_scalar(float *u, float scalar, int n) {
   }
   vecScalar(gpu_vect_u, scalar, BLOCK_SIZE, n);
   cudaThreadSynchronize();
-  cublasStatus_t cudaStat = cublasGetVector(n, n, gpu_vect_u, 1, u, 1);
-  if (cudaStat != cudaSuccess) {
-      printf ("vect_scalar: %d device memory upload failed for res\n", cudaStat);
+
+  cudaError_t cudaError = cudaMemcpy(u, gpu_vect_u, n * sizeof(float), cudaMemcpyDeviceToHost);
+  if (cudaError != cudaSuccess) {
+      printf ("vect_scalar: %d device memory upload failed for res\n", cudaError);
   }
   cudaFree(gpu_vect_u);
 }
@@ -366,9 +385,8 @@ void vect_substract(float *res, float *u, float *v, int m) {
 
   vecSub(gpu_vect_u, gpu_vect_v, gpu_vect_res, BLOCK_SIZE, m);
   cudaThreadSynchronize();
-  cudaStat = cublasGetVector(m, m, gpu_vect_res, 1, res, 1);
-
-  if (cudaStat != cudaSuccess) {
+  cudaError_t error = cudaMemcpy(res, gpu_vect_res, sizeof(float) * m, cudaMemcpyDeviceToHost);
+  if (error != cudaSuccess) {
       printf ("vect_substract: %d device memory upload failed for res", cudaStat);
   }
   cudaFree(gpu_vect_u);
@@ -392,7 +410,9 @@ float vect_norm(cublasHandle_t handle, float *u, int n) {
   return res;
 }
 float *vect_divide_by_scalar(float *u, float scalar, int n) {
-  float *res;
+  float *res = malloc(sizeof(float) * n);
+  if (!res)
+    return NULL;
   float *gpu_vect_u;
   gpu_vect_u = create_gpu_vector(u, n);
   if (!gpu_vect_u) {
@@ -400,10 +420,10 @@ float *vect_divide_by_scalar(float *u, float scalar, int n) {
   }
   vecScalar(gpu_vect_u, 1 / scalar, BLOCK_SIZE, n);
   cudaThreadSynchronize();
-  cublasStatus_t cudaStat = cublasGetVector(n, n, gpu_vect_u, 1, res, 1);
-  if (cudaStat != cudaSuccess) {
+  cudaError_t cudaError = cudaMemcpy(res, gpu_vect_u, sizeof(float) * n, cudaMemcpyDeviceToHost);
+  if (cudaError != cudaSuccess) {
+    printf ("vect_divide_by_scalar: %d device memory upload failed for res\n", cudaError);
   }
-  printf ("vect_divide_by_scalar: %d device memory upload failed for res\n", cudaStat);
   cudaFree(gpu_vect_u);
   return res;
 }
@@ -425,14 +445,16 @@ void vect_add(float *res, float *u, float *v, int m) {
 
   cublasStatus_t cudaStat = cudaMalloc((void**)&gpu_vect_res, m * sizeof(float));
   if (cudaStat != cudaSuccess) {
+      cudaFree(gpu_vect_u);
+      cudaFree(gpu_vect_v);
       printf ("vect_add: %d device memory allocation failed for cpu_data\n", cudaStat);
   }
 
   vecAdd(gpu_vect_u, gpu_vect_v, gpu_vect_res, BLOCK_SIZE, m);
   cudaThreadSynchronize();
-  cudaStat = cublasGetVector(m, m, gpu_vect_res, 1, res, 1);
+  cudaError_t error = cudaMemcpy(res, gpu_vect_res, sizeof(float) * m, cudaMemcpyDeviceToHost);
 
-  if (cudaStat != cudaSuccess) {
+  if (error != cudaSuccess) {
       printf ("vect_add: %d device memory upload failed for res\n", cudaStat);
   }
   cudaFree(gpu_vect_u);
@@ -445,6 +467,8 @@ void vect_add(float *res, float *u, float *v, int m) {
 void vect_mat_copy(cublasHandle_t handle, Mat *A, float *u, int col) {
   float *gpu_mat_A;
   float *gpu_vect_u;
+  if (col > 0)
+    col -= 1;
   gpu_mat_A = create_gpu_matrix(A->data, A->m, A->n);
   if (!gpu_mat_A) {
     printf("vect_mat_copy: Error in allocation of gpu_mat_A\n");
@@ -458,7 +482,7 @@ void vect_mat_copy(cublasHandle_t handle, Mat *A, float *u, int col) {
     return;
   }
   cublasStatus_t cublaStat = cublasScopy(handle, A->m, gpu_vect_u, 1,
-    gpu_mat_A + col, A->m);
+    gpu_mat_A + (A->m * col), 1);
 
   cublaStat = cublasGetMatrix(A->m, A->n, sizeof(*A->data), gpu_mat_A, A->m, A->data, A->m);
   if (cublaStat != cudaSuccess) {
@@ -476,19 +500,29 @@ float *get_column(cublasHandle_t handle, Mat *A, int col) {
     printf("get_column: Error in allocation of gpu_mat_A\n");
     return NULL;
   }
-  cudaError_t error = cudaMalloc((void**)&gpu_vect_res, A->m);
-  cublasStatus_t cublaStat = cublasScopy(handle, A->m, gpu_mat_A, 1,
+  cudaError_t cudaError = cudaMalloc((void**)&gpu_vect_res, sizeof(float) * A->m);
+  if (cudaError != cudaSuccess) {
+      printf ("get_column: %d Error in allocation of gpu_mat_A\n", cudaError);
+  }
+
+  cublasStatus_t cublaStat = cublasScopy(handle, A->m, gpu_mat_A + (A->m * col), 1,
     gpu_vect_res, 1);
 
-  cublasStatus_t cudaStat = cublasGetVector(A->m, A->m, gpu_vect_res, 1, res, 1);
+  cudaError = cudaMemcpy(res, gpu_vect_res, sizeof(float) * A->m, cudaMemcpyDeviceToHost);
+  //cublasStatus_t cudaStat = cublasGetVector(A->m, A->m, gpu_vect_res, 1, res, 1);
 
-  if (cudaStat != cudaSuccess) {
-      printf ("vect_add: %d device memory upload failed for res\n", cudaStat);
+  if (cudaError != cudaSuccess) {
+      printf ("get_column: %d device memory upload failed for res\n", cudaError);
   }
   cudaFree(gpu_mat_A);
   cudaFree(gpu_vect_res);
 
   return res;
+}
+void vect_print(float *u, int n) {
+  for (int i = 0; i < n; i++) {
+    printf("%8.5f\n", u[i]);
+  }
 }
 void matrix_print(Mat *A) {
   for (int j = 0; j < A->n; j++) {
