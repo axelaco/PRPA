@@ -16,6 +16,8 @@ Mat *matrix_new(int m, int n) {
   res->n = n;
   return res;
 }
+
+
 float *create_gpu_matrix(float *cpu_data, int m, int n) {
   cudaError_t cudaStat;
   cublasStatus_t stat;
@@ -53,6 +55,50 @@ float *create_gpu_vector(float *cpu_data, int n) {
       return NULL;
   }
   return gpu_vect_A;
+}
+void qr(cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat *Q) {
+  if (!A || !R || !Q)
+    return;
+  float *d_A = NULL; // linear memory of GPU
+  float *d_tau = NULL; // linear memory of GPU
+  int *devInfo = NULL; // info in gpu (device copy)
+  float *d_work = NULL;
+  int  lwork = 0;
+  int info_gpu = 0;
+
+  cudaError_t cudaStat1 = cudaMalloc ((void**)&d_tau, sizeof(double) * A->m);
+  if (cudaStat1 != cudaSuccess) {
+    printf("qr: %d error in allocation of d_tau\n", cudaStat1);
+    return;
+  }
+  cudaError_t cudaStat2 = cudaMalloc ((void**)&devInfo, sizeof(int));
+  d_A = create_gpu_matrix(A->data, A->m, A->n);
+  cusolverStatus_t cusolver_status = cusolverDnSgeqrf_bufferSize(
+       cusolverH,
+       A->m,
+       A->n,
+       d_A,
+       A->m,
+       &lwork);
+  cudaStat1 = cudaMalloc((void**)&d_work, sizeof(double)*lwork);
+  if (cudaStat1 != cudaSuccess) {
+    printf("qr: error in allocation d_work\n");
+  }
+  cusolver_status = cusolverDnSgeqrf(
+     cusolverH,
+     A->m,
+     A->n,
+     d_A,
+     A->m,
+     d_tau,
+     d_work,
+     lwork,
+     devInfo);
+  cudaStat1 = cudaDeviceSynchronize();
+  cudaFree(d_tau);
+  cudaFree(devInfo);
+  cudaFree(d_work);
+
 }
 Mat *matrix_mul(cublasHandle_t handle, Mat *A, Mat *B) {
   float *gpu_mat_A;
@@ -246,7 +292,12 @@ void matrix_scalar(Mat *A, float scalar) {
 
   cudaFree(gpu_mat_A);
 }
-
+void matrix_delete(Mat *mat) {
+  if (!mat)
+    return;
+  free(mat->data);
+  free(mat);
+}
 void vect_copy(float *src, float *dest, int m) {
   float *gpu_src;
   float *gpu_dest;
