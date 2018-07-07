@@ -15,6 +15,7 @@ int main (void){
     }
     Mat *A = matrix_new(M, N);
     Mat *B = matrix_new(M, N);
+    Mat *C = matrix_zeros(M, N);
     Mat *D = matrix_new(M, N);
     for (int j = 0; j < N; j++) {
         for (int i = 0; i < M; i++) {
@@ -32,24 +33,21 @@ int main (void){
     Mat *Q = matrix_zeros(M, N);
 
     // step 1: create cusolverDn/cublas handle
+    cublasStatus_t cublas_status = cublasCreate(&handle);
+    assert(CUBLAS_STATUS_SUCCESS == cublas_status);
+
     cublasStatus_t cusolver_status = cusolverDnCreate(&cusolverH);
     assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
 
-    cublasStatus_t cublas_status = cublasCreate(&handle);
-    assert(CUBLAS_STATUS_SUCCESS == cublas_status);
-    if (stat != CUBLAS_STATUS_SUCCESS) {
-        printf ("CUBLAS initialization failed\n");
-        return EXIT_FAILURE;
-    }
     qr(handle, cusolverH, A, R, Q);
     puts("Q:");
     matrix_print(Q);
     puts("R:");
     matrix_print(R);
-/*
+
     float *d_A = NULL;
     float *d_R = NULL;
-
+/*
     cudaMalloc((void**) &d_A, sizeof(float) * A->m * A->n);
     cudaMalloc((void**) &d_R, sizeof(float) * A->m * A->n);
     cudaError_t cudaError = cudaMemcpy(d_A, A->data, sizeof(float) * A->m * A->n, cudaMemcpyHostToDevice);
@@ -64,16 +62,16 @@ int main (void){
     matrix_print(D);
     cudaFree(d_A);
     cudaFree(d_R);
-
+*/
     puts("A:");
     matrix_print(A);
     puts("B:");
     matrix_print(B);
-    Mat *C = matrix_mul(handle, A, B);
-    if (!C)
-      return EXIT_FAILURE;
-    puts("A * B:");
-    matrix_print(C);
+  //  C = matrix_mul(handle, A, B);
+//    if (!C)
+    //  return EXIT_FAILURE;
+  //  puts("A * B:");
+  //  matrix_print(C);
     puts("A - B:");
     matrix_sub(A, B, C);
     matrix_print(C);
@@ -82,7 +80,6 @@ int main (void){
     puts("5 * A:");
     matrix_scalar(A, 5);
     matrix_print(A);
-
 
     // Vector Test
     puts("u:");
@@ -121,19 +118,15 @@ int main (void){
     float *res = malloc(sizeof(float) * A->m);
     vect_prod_mat(handle, A, u, res);
     vect_print(res, N);
-    Mat *AT = matrix_transpose(handle, A);
-    puts("A.T:");
-    matrix_print(AT);
-    */
     matrix_delete(A);
     matrix_delete(B);
     matrix_delete(D);
     matrix_delete(Q);
-    //matrix_delete(R);
+    matrix_delete(R);
     free(u);
     free(v);
-    //free(d);
-    //free(e);
-    //free(res);
+    free(d);
+    free(e);
+    free(res);
     return EXIT_SUCCESS;
 }

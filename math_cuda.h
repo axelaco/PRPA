@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <lapacke.h>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <cusolverDn.h>
@@ -20,12 +21,19 @@ void vecScalar(float *a, float scalar, int block_size, int n);
 void vecCopy(float *src, float *dest, int block_size, int n);
 void triu(float *d_src, float *d_dest, const int m,
    const int n, const int subM);
-float *qr_alg_eigen(cusolverDnHandle_t cusolverH, Mat *A);
+void transpose_kernel(float *d_dest, float *d_src, int w, int h);
+
+
+
+float *qr_alg_eigen(Mat *A, Mat *eigVector);
+float *matrix_diag(Mat *A);
+float *matrix_off_diag(Mat *A);
 void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat *Q);
 Mat *matrix_new(int m, int n);
 Mat *matrix_mul(cublasHandle_t handle, Mat *A, Mat *B);
 void matrix_mul_bis(cublasHandle_t handle, Mat *res, Mat *A, Mat *B);
 Mat *matrix_transpose(cublasHandle_t handle, Mat *A);
+Mat *matrix_transpose2(Mat *A);
 Mat *matrix_zeros(int m, int n);
 Mat *matrix_eye(int m, int n);
 void matrix_delete(Mat *A);

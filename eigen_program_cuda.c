@@ -1,7 +1,32 @@
 #include "math_cuda.h"
-#define N 10
-#define K 5
-#define M 20
+#include <time.h>
+#define N 1000
+#define K 100
+#define M 200
+
+static int cmp_abs (void const *a, void const *b)
+{
+   /* definir des pointeurs type's et initialise's
+      avec les parametres */
+   float const *pa = a;
+   float const *pb = b;
+
+   /* evaluer et retourner l'etat de l'evaluation (tri croissant) */
+   return abs(*pa) - abs(*pb);
+}
+
+// QSort Algorithm
+static int my_compare (void const *a, void const *b)
+{
+   /* definir des pointeurs type's et initialise's
+      avec les parametres */
+   float const *pa = a;
+   float const *pb = b;
+
+   /* evaluer et retourner l'etat de l'evaluation (tri croissant) */
+   return abs(*pb) - abs(*pa);
+}
+
 void lanczos_facto(cublasHandle_t handle, Mat *A, float *v0, int k, int m, Mat *Vm, Mat *Tm, float *fm) {
   float b1 = 0;
   float *wPrime = malloc(sizeof(float) * A->m);
@@ -44,12 +69,11 @@ void lanczos_facto(cublasHandle_t handle, Mat *A, float *v0, int k, int m, Mat *
   free(wPrime);
 }
 
-float *lanczos_ir(cublasHandle_t handle, Mat *A, float *v0, int k, int m) {
-  cusolverDnHandle_t cusolverH = NULL;
-  cublasStatus_t cusolver_status = cusolverDnCreate(&cusolverH);
-  assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
+float *lanczos_ir(cublasHandle_t handle, cusolverDnHandle_t cusolverH,
+  Mat *A, float *v0, int k, int m) {
   Mat *Vm = matrix_zeros(A->n, m);
   Mat *Tm = matrix_zeros(m, m);
+  Mat *q = NULL;
   float residual = 1;
   float *fm = malloc(sizeof(float) * A->m);
   Mat *Qm = NULL;
@@ -58,9 +82,10 @@ float *lanczos_ir(cublasHandle_t handle, Mat *A, float *v0, int k, int m) {
   float eps = 0.00001;
   lanczos_facto(handle, A, v0, 1, m, Vm, Tm, fm);
   int nb_iter = 0;
-  while(residual > eps || nb_iter < 5) {
-    printf("Iteration: %d\n", nb_iter);
-    float *eigs = qr_alg_eigen(cusolverH, Tm);//rritz(Tm, &residual, fm, k, residual);
+  while(residual > eps && nb_iter < 100) {
+    q = matrix_zeros(Tm->m, Tm->n);
+    float *eigs = qr_alg_eigen(Tm, q);//rritz(Tm, &residual, fm, k, residual);
+    qsort(eigs, Tm->m, sizeof(*eigs), cmp_abs);
     Qm = matrix_eye(m, m);
     for (int j = m - k; j >= 0; j--) {
       Mat *mat_tmp = matrix_new(Tm->m, Tm->n);
@@ -75,12 +100,9 @@ float *lanczos_ir(cublasHandle_t handle, Mat *A, float *v0, int k, int m) {
       qr(handle, cusolverH, mat_tmp, R, Q);
       // Hm = Qj*HmQj
 
-      printf("Start Transpose\n");
       QT = matrix_transpose(handle, Q);
       Mat *tmp_mul = matrix_zeros(QT->m, Tm->n);
-      printf("Start matrix_mul_bis\n");
       matrix_mul_bis(handle, tmp_mul, QT, Tm);
-      printf("Start matrix_mul_bis 2\n");
       matrix_mul_bis(handle, Tm, tmp_mul, Q);
       QmT = matrix_transpose(handle, Qm);
       matrix_mul_bis(handle, Qm, QmT, Q);
@@ -118,6 +140,7 @@ float *lanczos_ir(cublasHandle_t handle, Mat *A, float *v0, int k, int m) {
     // delete all temporary variables
     free(QmK);
     matrix_delete(Qm);
+    matrix_delete(q);
     free(Vk);
     free(tmp_fm);
     free(tmp_fm2);
@@ -126,26 +149,22 @@ float *lanczos_ir(cublasHandle_t handle, Mat *A, float *v0, int k, int m) {
   }
 
   matrix_delete(Vm);
-  //Mat *eigVector = matrix_zeros(Tm->m, Tm->n);
-  float *eigs = qr_alg_eigen(cusolverH, Tm);//, eigVector);
+  q = matrix_zeros(Tm->m, Tm->n);
+  float *eigs = qr_alg_eigen(Tm, q);
   //matrix_delete(eigVector);
   matrix_delete(Tm);
   free(fm);
 
   if (handle ) cublasDestroy(handle);
-  if (cusolverH) cusolverDnDestroy(cusolverH);
-
+  //if (cusolverH) cusolverDnDestroy(cusolverH
   cudaDeviceReset();
   return eigs;
   //return NULL;
 }
-void eigen_values(Mat *A) {
+void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A) {
 
     int nb_iter = 0;
     float *v = calloc(A->n, sizeof(float));
-    cublasHandle_t handle = NULL;
-    cublasStatus_t cublas_status = cublasCreate(&handle);
-    assert(CUBLAS_STATUS_SUCCESS == cublas_status);
     for (int i = 0; i < A->n - 1; i++)
       v[i] = 1;
     float vNorm =  vect_norm(handle, v, A->n);
@@ -162,9 +181,9 @@ void eigen_values(Mat *A) {
     puts("Tm:");
     matrix_print(Tm);
 */
-    float *res = lanczos_ir(handle, A, v, K, M);
+    float *res = lanczos_ir(handle, cusolverH, A, v, K, M);
     printf("##### Eigen Values: #####\n");
-  //  qsort(res, M, sizeof(*res), my_compare);
+    qsort(res, M, sizeof(*res), my_compare);
     for (int i = 0; i < K; i++)
       printf("%8.5f\n", res[i]);
     free(res);
@@ -186,16 +205,24 @@ int main(void) {
 
   int tmp;
   Mat *A = matrix_new(N, N);
-  /*for (int i = 0; i < N * N; i++)
-    A->data[i] = in[i / N][i % N];
-  matrix_print(A);
-  */
+  cublasHandle_t handle = NULL;
+  cublasStatus_t cublas_status = cublasCreate(&handle);
+  assert(CUBLAS_STATUS_SUCCESS == cublas_status);
+  cusolverDnHandle_t cusolverH = NULL;
+  cublasStatus_t cusolver_status = cusolverDnCreate(&cusolverH);
+  assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
+
   init_random_matrix_sym(A);
   matrix_print(A);
   puts("");
-
-  eigen_values(A);
+  clock_t t = clock();
+  eigen_values(handle, cusolverH, A);
+  t = clock() - t;
+  double time_taken = ((double)t)/CLOCKS_PER_SEC;
+  printf("ComputeImage took %.4f seconds to execute \n", time_taken);
   matrix_delete(A);
+  //if (handle ) cublasDestroy(handle);
 
+  cudaDeviceReset();
   return 0;
 }

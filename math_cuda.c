@@ -4,16 +4,6 @@
 #define BLOCK_SIZE 256
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
 
-static int cmp_abs (void const *a, void const *b)
-{
-   /* definir des pointeurs type's et initialise's
-      avec les parametres */
-   float const *pa = a;
-   float const *pb = b;
-
-   /* evaluer et retourner l'etat de l'evaluation (tri croissant) */
-   return abs(*pa) - abs(*pb);
-}
 
 
 Mat *matrix_new(int m, int n) {
@@ -29,72 +19,38 @@ Mat *matrix_new(int m, int n) {
   res->n = n;
   return res;
 }
+float *matrix_diag(Mat *A) {
+  float *res = malloc(sizeof(float) * A->m);
+  if (!res)
+    return NULL;
+  res[0] = A->data[0];
+  int i = (A->m + 1);
+  int j = 1;
+  for (;i < A->m * A->n; i += (A->m + 1)) {
+    res[j] = A->data[i];
+    j++;
+  }
+  return res;
+}
+// NAIVE
+float *matrix_off_diag(Mat *A) {
+  float *res = malloc(sizeof(float) * A->n - 1);
+  int j = 0;
+  for (int i = 1; i < A->m * A->n; i += (A->m + 1)) {
+    res[j] = A->data[i];
+    j++;
+  }
+  return res;
+}
 
-float *qr_alg_eigen(cusolverDnHandle_t cusolverH, Mat *A) {
-  cusolverStatus_t cusolver_status = CUSOLVER_STATUS_SUCCESS;
-  cudaError_t cudaStat1 = cudaSuccess;
-  cudaError_t cudaStat2 = cudaSuccess;
-  cudaError_t cudaStat3 = cudaSuccess;
-  const int m = A->m;
-  const int lda = m;
-  float V[lda*m]; // eigenvectors
-  float *W = malloc(sizeof(float) * m); // eigenvalues
-  float *d_A = NULL;
-  float *d_W = NULL;
-  int *devInfo = NULL;
-  float *d_work = NULL;
-  int  lwork = 0;
-
-  int info_gpu = 0;
-
-  // step 1: create cusolver/cublas handle
-    cusolver_status = cusolverDnCreate(&cusolverH);
-    assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
-
-  // step 2: copy A and W to device
-    cudaStat1 = cudaMalloc ((void**)&d_A, sizeof(float) * lda * m);
-    cudaStat2 = cudaMalloc ((void**)&d_W, sizeof(float) * m);
-    cudaStat3 = cudaMalloc ((void**)&devInfo, sizeof(int));
-    assert(cudaSuccess == cudaStat1);
-    assert(cudaSuccess == cudaStat2);
-    assert(cudaSuccess == cudaStat3);
-
-    cudaStat1 = cudaMemcpy(d_A, A->data, sizeof(float) * lda * m, cudaMemcpyHostToDevice);
-    assert(cudaSuccess == cudaStat1);
-  // step 3: query working space of syevd
-    cusolverEigMode_t jobz = CUSOLVER_EIG_MODE_VECTOR; // compute eigenvalues and eigenvectors.
-    cublasFillMode_t uplo = CUBLAS_FILL_MODE_LOWER;
-    cusolver_status = cusolverDnSsyevd_bufferSize(cusolverH, jobz, uplo, m, d_A,
-            lda, d_W, &lwork);
-    assert (cusolver_status == CUSOLVER_STATUS_SUCCESS);
-
-    cudaStat1 = cudaMalloc((void**)&d_work, sizeof(float)*lwork);
-    assert(cudaSuccess == cudaStat1);
-  // step 4: compute spectrum
-    cusolver_status = cusolverDnSsyevd(cusolverH, jobz, uplo, m, d_A, lda,
-            d_W, d_work, lwork, devInfo);
-    cudaStat1 = cudaDeviceSynchronize();
-    assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
-    assert(cudaSuccess == cudaStat1);
-
-    cudaStat1 = cudaMemcpy(W, d_W, sizeof(float)*m, cudaMemcpyDeviceToHost);
-    cudaStat2 = cudaMemcpy(V, d_A, sizeof(float)*lda*m, cudaMemcpyDeviceToHost);
-    cudaStat3 = cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
-    assert(cudaSuccess == cudaStat1);
-    assert(cudaSuccess == cudaStat2);
-    assert(cudaSuccess == cudaStat3);
-
-    printf("after syevd: info_gpu = %d\n", info_gpu);
-    assert(0 == info_gpu);
-
-    // free resources
-    if (d_A    ) cudaFree(d_A);
-    if (d_W    ) cudaFree(d_W);
-    if (devInfo) cudaFree(devInfo);
-    if (d_work ) cudaFree(d_work);
-    qsort(W, A->m, sizeof(*W), cmp_abs);
-    return W;
-
+float *qr_alg_eigen(Mat *A, Mat *eigVector) {
+  float *diag = matrix_diag(A);
+  float *off_diag = matrix_off_diag(A);
+  float *WORK = malloc(sizeof(float) * 2 * A->n - 2);
+  int n = A->n;
+  int info;
+  LAPACK_ssteqr("I", &n, diag, off_diag, eigVector->data, &n, WORK, &info);
+  return diag;
 }
 
 float *create_gpu_matrix(float *cpu_data, int m, int n) {
@@ -216,7 +172,6 @@ void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat
             cudaStat1 = cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
             assert(cudaSuccess == cudaStat1);
 
-            printf("after geqrf: info_gpu = %d\n", info_gpu);
             assert(0 == info_gpu);
             cudaError_t cudaError = cudaMalloc((void**)&d_R, sizeof(float) *  R->m * R->n);
             assert(cudaSuccess == cudaError);
@@ -244,7 +199,6 @@ void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat
             cudaStat1 = cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
             assert(cudaSuccess == cudaStat1);
 
-            printf("after orgqr: info_gpu = %d\n", info_gpu);
             assert(0 == info_gpu);
 
             cudaStat1 = cudaMemcpy(Q->data, d_A, sizeof(float)*lda*n, cudaMemcpyDeviceToHost);
@@ -258,11 +212,6 @@ void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat
         if (devInfo) cudaFree(devInfo);
         if (d_work ) cudaFree(d_work);
         if (d_R    ) cudaFree(d_R);
-
-        if (handle ) cublasDestroy(handle);
-        if (cusolverH) cusolverDnDestroy(cusolverH);
-
-        cudaDeviceReset();
 }
 Mat *matrix_eye(int m, int n) {
   Mat *A = matrix_new(m, n);
@@ -310,7 +259,7 @@ Mat *matrix_mul(cublasHandle_t handle, Mat *A, Mat *B) {
   stat = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, A->m, B->n, A->n, &alpha,
   gpu_mat_A, A->m, gpu_mat_B, B->m, &beta, gpu_mat_C, A->m);
   if (stat != CUBLAS_STATUS_SUCCESS) {
-      printf ("matrix_mul: CUBLAS multiplication failed\n");
+      printf ("matrix_mul: %d CUBLAS multiplication failed\n", stat);
       return NULL;
   }
   stat = cublasGetMatrix(C->m, C->n, sizeof(*C->data), gpu_mat_C, C->m, C->data, C->m);
@@ -333,51 +282,39 @@ Mat *matrix_mul(cublasHandle_t handle, Mat *A, Mat *B) {
   return C;
 }
 void matrix_mul_bis(cublasHandle_t handle, Mat *res, Mat *A, Mat *B) {
-  float *gpu_mat_A;
-  float *gpu_mat_B;
-  float *gpu_mat_C;
-  cublasStatus_t stat;
-  cudaError_t cudaStat;
-  gpu_mat_A = create_gpu_matrix(A->data, A->m, A->n);
-  if (!gpu_mat_A) {
-    printf("matrix_mul_bis: GPU MAT A CREATION ERROR\n");
-    return;
-  }
-  gpu_mat_B = create_gpu_matrix(B->data, B->m, B->n);
-  if (!gpu_mat_B) {
-    printf("matrix_mul_bis: GPU MAT B CREATION ERROR\n");
-    return;
-  }
+  cublasStatus_t cublas_status = CUBLAS_STATUS_SUCCESS;
+  cudaError_t cudaStat1 = cudaSuccess;
+  cudaError_t cudaStat2 = cudaSuccess;
+  cudaError_t cudaStat3 = cudaSuccess;
+  cudaError_t cudaStat4 = cudaSuccess;
+  const int m = A->m;
+  const int lda = B->m;
+  const int ldb = B->m;
+  float *d_A;
+  float *d_B;
+  float *d_C;
+
+  cudaStat1 = cudaMalloc((void**)&d_A, sizeof(float) * A->m * A->n);
+  cudaStat2 = cudaMalloc((void**)&d_B, sizeof(float) * B->m * B->n);
+  cudaStat3 = cudaMalloc((void**)&d_C, sizeof(float) * res->m * res->n);
+  assert(cudaSuccess == cudaStat1);
+  assert(cudaSuccess == cudaStat2);
+  assert(cudaSuccess == cudaStat3);
+
+  cudaMemcpy(d_A, A->data, sizeof(float) * A->m * A->n, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_B, B->data, sizeof(float) * A->m * A->n, cudaMemcpyHostToDevice);
   float alpha = 1;
   float beta = 0;
-  cudaStat = cudaMalloc((void**)&gpu_mat_C, res->m * res->n * sizeof(float));
-  if (cudaStat != cudaSuccess) {
-      printf ("matrix_mul_bis: %d device memory allocation failed for cpu_data", cudaStat);
-      return;
-  }
-  stat = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, A->m, B->n, A->n, &alpha,
-  gpu_mat_A, A->m, gpu_mat_B, B->m, &beta, gpu_mat_C, A->m);
-  if (stat != CUBLAS_STATUS_SUCCESS) {
-      printf ("matrix_mul_bis: CUBLAS multiplication failed\n");
-      return;
-  }
-  stat = cublasGetMatrix(res->m, res->n, sizeof(*res->data), gpu_mat_C, res->m, res->data, res->m);
-  if (stat != CUBLAS_STATUS_SUCCESS) {
-      printf ("%d data upload failed", stat);
-      if (stat == CUBLAS_STATUS_INVALID_VALUE)
-        printf("CUBLAS_STATUS_INVALID_VALUE\n");
-      if (stat == CUBLAS_STATUS_MAPPING_ERROR)
-        printf("CUBLAS_STATUS_MAPPING_ERROR\n");
-      if (stat == CUBLAS_STATUS_NOT_INITIALIZED)
-        printf("CUBLAS_STATUS_NOT_INITIALIZED\n");
-      cudaFree (gpu_mat_A);
-      cudaFree (gpu_mat_B);
-      cudaFree (gpu_mat_C);
-      return;
-  }
-  cudaFree (gpu_mat_A);
-  cudaFree (gpu_mat_B);
-  cudaFree (gpu_mat_C);
+  cublas_status = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, A->n, A->n, &alpha,
+     d_A, lda, d_B, ldb, &beta, d_C, lda);
+  assert(CUBLAS_STATUS_SUCCESS == cublas_status);
+  cudaMemcpy(res->data, d_C, sizeof(float) * lda * B->n, cudaMemcpyDeviceToHost);
+  cudaDeviceSynchronize();
+
+  cudaFree(d_A);
+  cudaFree(d_B);
+  cudaFree(d_C);
+
 }
 void matrix_sub(Mat *A, Mat *B, Mat *res) {
   float *gpu_mat_A;
@@ -437,6 +374,15 @@ void matrix_add(Mat *A, Mat *B, Mat *res) {
   cudaFree(gpu_mat_res);
 
 }
+Mat *matrix_transpose2(Mat *A) {
+  Mat *res = matrix_new(A->n, A->m);
+  for (int i = 0; i < A->m; i++) {
+    for (int j = 0; j < A->n; j++) {
+      res->data[j * A->n + i] = A->data[i * A->m + j];
+    }
+  }
+  return res;
+}
 Mat *matrix_transpose(cublasHandle_t handle, Mat *A) {
   float *gpu_mat_A;
   float *gpu_mat_res;
@@ -458,6 +404,7 @@ Mat *matrix_transpose(cublasHandle_t handle, Mat *A) {
   if (cudaStat != cudaSuccess) {
       printf ("matrix_transpose: %d device memory upload failed for res", cudaStat);
   }
+  cudaMemcpy(res->data, gpu_mat_res, sizeof(float) * A->m * A->n, cudaMemcpyDeviceToHost);
   cudaFree(gpu_mat_A);
   cudaFree(gpu_mat_res);
   return res;

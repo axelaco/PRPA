@@ -1,8 +1,9 @@
 #include "math.h"
 #include <omp.h> // OpenMP
+#include <time.h>
 #define N 1000
 #define K 100
-#define M 120
+#define M 200
 
 // QSort Algorithm
 static int my_compare (void const *a, void const *b)
@@ -449,10 +450,11 @@ int main(void) {
   //matrix_print(A);
   puts("");
 
-  float start = omp_get_wtime();
+  clock_t t = clock();
   eigen_values(A);
-  float stop = omp_get_wtime();
-  printf("Time : %lf\n", stop-start);
+  t = clock() - t;
+  double time_taken = ((double)t)/CLOCKS_PER_SEC;
+  printf("Compute EigenValues took %.4f seconds to execute \n", time_taken);
   matrix_delete(A);
 
   return 0;

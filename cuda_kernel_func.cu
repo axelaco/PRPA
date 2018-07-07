@@ -27,3 +27,19 @@ extern "C" void triu(float *d_src,
   dim3 Threads(m, n);
   triu_kernel<<<Blocks, Threads>>>(d_src, d_dest, m, n);
 }
+
+extern "C" void transpose_kernel(float *d_dest, float *d_src, int w, int h) {
+  const int TILE_DIM = 32;
+  const int BLOCK_ROWS = 8;
+
+  dim3 dimGrid((w + TILE_DIM - 1)/TILE_DIM, (h + TILE_DIM - 1)/TILE_DIM, 1);
+  dim3 dimBlock(TILE_DIM, BLOCK_ROWS, 1);
+  transposeNoBankConflicts<<<dimGrid, dimBlock>>>(d_dest, d_src);
+
+  /*for (int i = 0; i < NUM_REPS; i++) {
+    transposeNoBankConflicts<<<dimGrid, dimBlock>>>(d_dest, d_src);
+    gpuErrchk( cudaPeekAtLastError() );
+
+  }
+  */
+}
