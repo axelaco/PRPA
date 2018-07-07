@@ -47,23 +47,10 @@ __global__ void triu_kernel(float *d_src,
         d_dest[j * N + i] = d_src[j * N + i];
     }
 }
-const int TILE_DIM = 32;
-const int BLOCK_ROWS = 8;
 
-__global__ void transposeNoBankConflicts(float *d_dest,float *d_src)
-{
-  __shared__ float tile[TILE_DIM * TILE_DIM];
-
-   int x = blockIdx.x * TILE_DIM + threadIdx.x;
-   int y = blockIdx.y * TILE_DIM + threadIdx.y;
-   int width = gridDim.x * TILE_DIM;
-
-   for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
-      tile[(threadIdx.y+j)*TILE_DIM + threadIdx.x] = d_src[(y+j)*width + x];
-
-   __syncthreads();
-
-   for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
-      d_dest[(y+j)*width + x] = tile[(threadIdx.y+j)*TILE_DIM + threadIdx.x];
-
+__global__ void update_value_kernel(float *d_A, int idx, float val) {
+    d_A[idx] = val;
+}
+__global__ void get_value_kernel(float *d_A, int idx, float *res) {
+  *res = d_A[idx];
 }

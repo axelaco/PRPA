@@ -118,6 +118,8 @@ int main (void){
     float *res = malloc(sizeof(float) * A->m);
     vect_prod_mat(handle, A, u, res);
     vect_print(res, N);
+
+
     matrix_delete(A);
     matrix_delete(B);
     matrix_delete(D);

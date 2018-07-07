@@ -1,8 +1,8 @@
 #include "math_cuda.h"
 #include <time.h>
-#define N 1000
-#define K 100
-#define M 200
+#define N 10
+#define K 5
+#define M 20
 
 static int cmp_abs (void const *a, void const *b)
 {
@@ -170,7 +170,7 @@ void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A) {
     float vNorm =  vect_norm(handle, v, A->n);
     for (int i = 0; i < A->n; i++) {
         v[i] /= vNorm;
-    }/*
+    }
     Mat *Vm = matrix_zeros(A->n, M);
     Mat *Tm = matrix_zeros(M, M);
     float *fm = malloc(sizeof(float) * A->m);
@@ -180,13 +180,13 @@ void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A) {
     matrix_print(Vm);
     puts("Tm:");
     matrix_print(Tm);
-*/
+/*
     float *res = lanczos_ir(handle, cusolverH, A, v, K, M);
     printf("##### Eigen Values: #####\n");
     qsort(res, M, sizeof(*res), my_compare);
     for (int i = 0; i < K; i++)
       printf("%8.5f\n", res[i]);
-    free(res);
+    free(res);*/
     free(v);
 }
 void init_random_matrix_sym(Mat *A) {
@@ -219,7 +219,7 @@ int main(void) {
   eigen_values(handle, cusolverH, A);
   t = clock() - t;
   double time_taken = ((double)t)/CLOCKS_PER_SEC;
-  printf("ComputeImage took %.4f seconds to execute \n", time_taken);
+  printf("Compute EigenValues took %.4f seconds to execute \n", time_taken);
   matrix_delete(A);
   //if (handle ) cublasDestroy(handle);
 

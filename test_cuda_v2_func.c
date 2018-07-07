@@ -148,7 +148,15 @@ int main (void){
     cudaMalloc((void**) &d_res, sizeof(float) * A->m);
     vect_prod_mat(handle, A, d_u, d_res);
     vect_print(d_res, N);
-
+    puts("diag(A):");
+    float *d_diag = matrix_diag(A);
+    vect_print(d_diag, A->m);
+    Mat *eigVector = matrix_zeros(A->m, A->n);
+    float *d_eigs = qr_alg_eigen(A, eigVector);
+    puts("eigs:");
+    vect_print(d_eigs, A->m);
+    cudaFree(d_diag);
+    cudaFree(d_eigs);
     matrix_delete(A);
     matrix_delete(B);
     matrix_delete(D);

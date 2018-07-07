@@ -17,41 +17,70 @@ Mat *matrix_new(int m, int n) {
   res->n = n;
   return res;
 }
-/*
+
 float *matrix_diag(Mat *A) {
-  float *res = malloc(sizeof(float) * A->m);
-  if (!res)
+  float *h_res = malloc(sizeof(float) * A->m);
+  if (!h_res)
     return NULL;
-  res[0] = A->data[0];
+  float *d_res = NULL;
+  float *h_A = malloc(sizeof(float) * A->m * A->n);
+  cudaMalloc((void**)&d_res, sizeof(float) * A->m);
+  cudaMemcpy(h_A, A->d_data, sizeof(float) * A->m * A->n, cudaMemcpyDeviceToHost);
+
+  h_res[0] = h_A[0];
   int i = (A->m + 1);
   int j = 1;
   for (;i < A->m * A->n; i += (A->m + 1)) {
-    res[j] = A->data[i];
+    h_res[j] = h_A[i];
     j++;
   }
-  return res;
-}
-// NAIVE
-float *matrix_off_diag(Mat *A) {
-  float *res = malloc(sizeof(float) * A->n - 1);
-  int j = 0;
-  for (int i = 1; i < A->m * A->n; i += (A->m + 1)) {
-    res[j] = A->data[i];
-    j++;
-  }
-  return res;
+  cudaMemcpy(d_res, h_res, sizeof(float) * A->m, cudaMemcpyHostToDevice);
+  free(h_res);
+  free(h_A);
+  return d_res;
 }
 
+float *matrix_off_diag(Mat *A) {
+  float *h_data = malloc(sizeof(float) * A->m * A->n);
+  float *h_res = malloc(sizeof(float) * A->n - 1);
+
+  float *d_res = NULL;
+  cudaMalloc((void**) &d_res, sizeof(float) * A->n - 1);
+  cudaMemcpy(h_data, A->d_data, sizeof(float) * A->m * A->n, cudaMemcpyDeviceToHost);
+
+  int j = 0;
+  for (int i = 1; i < A->m * A->n; i += (A->m + 1)) {
+    h_res[j] = h_data[i];
+    j++;
+  }
+  cudaMemcpy(d_res, h_res, sizeof(float) * A->n - 1, cudaMemcpyHostToDevice);
+  free(h_data);
+  free(h_res);
+  return d_res;
+}
 float *qr_alg_eigen(Mat *A, Mat *eigVector) {
-  float *diag = matrix_diag(A);
-  float *off_diag = matrix_off_diag(A);
+  float *d_diag = matrix_diag(A);
+  float *d_off_diag = matrix_off_diag(A);
+
+  float *h_diag = malloc(sizeof(float) * A->m);
+  float *h_off_diag = malloc(sizeof(float) * A->n - 1);
+  float *h_eigVector_data = malloc(sizeof(float) * eigVector->m * eigVector->n);
+
+  cudaMemcpy(h_diag, d_diag, sizeof(float) * A->m, cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_off_diag, d_off_diag, sizeof(float) * A->m, cudaMemcpyDeviceToHost);
+
   float *WORK = malloc(sizeof(float) * 2 * A->n - 2);
   int n = A->n;
   int info;
-  LAPACK_ssteqr("I", &n, diag, off_diag, eigVector->data, &n, WORK, &info);
-  return diag;
+  LAPACK_ssteqr("I", &n, h_diag, h_off_diag, h_eigVector_data, &n, WORK, &info);
+  cudaMemcpy(eigVector->d_data, h_eigVector_data,
+    sizeof(float) * eigVector->m * eigVector->n, cudaMemcpyHostToDevice);
+
+  free(h_diag);
+  free(h_off_diag);
+  free(h_eigVector_data);
+  return h_diag;
 }
-*/
 void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat *Q) {
   if (!A || !R || !Q)
     return;
@@ -263,7 +292,8 @@ float vect_norm(cublasHandle_t handle, float *d_u, int n) {
 float *vect_divide_by_scalar(float *d_u, float scalar, int n) {
   float *d_res = NULL;
   cudaMalloc((void**)&d_res, sizeof(float) * n);
-  vecScalar(d_u, 1 / scalar, BLOCK_SIZE, n);
+  cudaMemcpy(d_res, d_u, sizeof(float) * n, cudaMemcpyDeviceToDevice);
+  vecScalar(d_res, 1 / scalar, BLOCK_SIZE, n);
   cudaDeviceSynchronize();
   return d_res;
 }
