@@ -51,7 +51,18 @@ __global__ void triu_kernel(float *d_src,
 __global__ void update_value_kernel(float *d_A, int idx, float val) {
     d_A[idx] = val;
 }
-__global__ void get_value_kernel(float *d_A, int idx, float *res) {
-  printf("%8.5f\n", d_A[idx]);
-  res[0] = d_A[idx];
+
+__global__ void diag_kernel(float *d_A, float *d_res, int w, int h) {
+  int id = blockIdx.x * blockDim.x + threadIdx.x;
+  if (id < w) {
+    d_res[id] = d_A[id * w + id];
+  }
 }
+
+__global__ void off_diag_kernel(float *d_A, float *d_res,
+  int w, int h) {
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+    if (id < h) {
+      d_res[id] = d_A[id * (w + 1) + 1];
+    }
+  }

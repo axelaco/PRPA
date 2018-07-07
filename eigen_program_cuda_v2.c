@@ -1,7 +1,7 @@
 #include "math_cuda_v2.h"
 #include <time.h>
-#define N 10
-#define K 5
+#define N 100
+#define K 10
 #define M 20
 
 static int cmp_abs (void const *a, void const *b)
@@ -224,13 +224,12 @@ int main(void) {
   assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
 
   init_random_matrix_sym(A);
-  matrix_print(A);
-  puts("");
   clock_t t = clock();
   eigen_values(handle, cusolverH, A);
   t = clock() - t;
   double time_taken = ((double)t)/CLOCKS_PER_SEC;
-  printf("Compute EigenValues took %.4f seconds to execute \n", time_taken);
+  printf("N = %d K = %d M = %d\n", N, K, M);
+  printf("Compute   EigenValues took %.4f seconds to execute \n", time_taken);
   matrix_delete(A);
 
   if (handle ) cublasDestroy(handle);

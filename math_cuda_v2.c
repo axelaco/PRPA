@@ -38,30 +38,23 @@ Mat *matrix_new(int m, int n) {
   res->n = n;
   return res;
 }
-
 float *matrix_diag(Mat *A) {
-  float *h_res = malloc(sizeof(float) * A->m);
-  if (!h_res)
-    return NULL;
   float *d_res = NULL;
-  float *h_A = malloc(sizeof(float) * A->m * A->n);
-  cudaMalloc((void**)&d_res, sizeof(float) * A->m);
-  cudaMemcpy(h_A, A->d_data, sizeof(float) * A->m * A->n, cudaMemcpyDeviceToHost);
-
-  h_res[0] = h_A[0];
-  int i = (A->m + 1);
-  int j = 1;
-  for (;i < A->m * A->n; i += (A->m + 1)) {
-    h_res[j] = h_A[i];
-    j++;
-  }
-  cudaMemcpy(d_res, h_res, sizeof(float) * A->m, cudaMemcpyHostToDevice);
-  free(h_res);
-  free(h_A);
+  cudaMalloc((void **)&d_res, sizeof(float) * A->m);
+  diag(A->d_data, d_res, A->m, A->n);
+  cudaDeviceSynchronize();
   return d_res;
 }
 
 float *matrix_off_diag(Mat *A) {
+  float *d_res = NULL;
+  cudaMalloc((void **) &d_res, sizeof(float) * A->n - 1);
+  off_diag(A->d_data, d_res, A->m, A->n - 1);
+  cudaDeviceSynchronize();
+  return d_res;
+}
+
+float *matrix_off_diag_old(Mat *A) {
   float *h_data = malloc(sizeof(float) * A->m * A->n);
   float *h_res = malloc(sizeof(float) * A->n - 1);
 
@@ -71,6 +64,7 @@ float *matrix_off_diag(Mat *A) {
 
   int j = 0;
   for (int i = 1; i < A->m * A->n; i += (A->m + 1)) {
+    printf("[%d]", i);
     h_res[j] = h_data[i];
     j++;
   }

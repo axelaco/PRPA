@@ -23,10 +23,14 @@ void triu(float *d_src, float *d_dest, const int m,
    const int n, const int subM);
 void update_value(float *d_A, int idx, float val);
 float get_value(float *d_A, int idx);
+void diag(float *d_A, float *d_res, int w, int h);
+void off_diag(float *d_A, float *d_res, int w, int h);
 
 float *qr_alg_eigen(Mat *A, Mat *eigVector);
 float *matrix_diag(Mat *A);
+float *matrix_diag2(Mat *A);
 float *matrix_off_diag(Mat *A);
+float *matrix_off_diag2(Mat *A);
 void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat *Q);
 Mat *matrix_new(int m, int n);
 Mat *matrix_mul(cublasHandle_t handle, Mat *A, Mat *B);
