@@ -51,7 +51,7 @@ void lanczos_facto(cublasHandle_t handle, Mat *A, float *d_v0, int k, int m, Mat
     if (j > 0) {
       float* d_vjOld = get_column(handle, Vm, j - 1);
       vect_scalar(d_vjOld, b1, A->m);
-      float *d_tmp = NULL; //malloc(sizeof(float) * A->m);
+      float *d_tmp = NULL;
       cudaMalloc((void**)&d_tmp, sizeof(float) * A->m);
       vect_substract(d_tmp, d_wPrime, d_v, A->m);
       vect_substract(d_fm, d_tmp, d_vjOld, A->m);
@@ -95,7 +95,6 @@ float *lanczos_ir(cublasHandle_t handle, cusolverDnHandle_t cusolverH,
   while(residual > eps && nb_iter < 100) {
     q = matrix_zeros(Tm->m, Tm->n);
     float *d_eigs = qr_alg_eigen(Tm, q);//rritz(Tm, &residual, fm, k, residual);
-    // qsort(d_eigs, Tm->m, sizeof(*eigs), cmp_abs);
     Qm = matrix_eye(m, m);
     for (int j = m - k; j >= 0; j--) {
       Mat *mat_tmp = matrix_new(Tm->m, Tm->n);
@@ -174,7 +173,6 @@ float *lanczos_ir(cublasHandle_t handle, cusolverDnHandle_t cusolverH,
   cudaFree(d_fm);
 
   return d_eigs;
-  //return NULL;
 }
 void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A) {
 
@@ -191,23 +189,8 @@ void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A) {
     }
 
     cudaMemcpy(d_v, h_v, sizeof(float) * A->n, cudaMemcpyHostToDevice);
-/*
-    Mat *Vm = matrix_zeros(A->n, M);
-    Mat *Tm = matrix_zeros(M, M);
-    float *d_fm = NULL;
-    cudaMalloc((void**) &d_fm, sizeof(float) * A->m);
-    vect_print(d_v, A->n);
-    lanczos_facto(handle, A, d_v, 1, M, Vm, Tm, d_fm);
-    puts("VM:");
-    matrix_print(Vm);
-    puts("Tm:");
-    matrix_print(Tm);
-*/
     float *d_res = lanczos_ir(handle, cusolverH, A, d_v, K, M);
     printf("##### Eigen Values: #####\n");
-    /*qsort(res, M, sizeof(*res), my_compare);
-    for (int i = 0; i < K; i++)
-      printf("%8.5f\n", res[i]);*/
     vect_print(d_res, K);
     cudaFree(d_res);
     cudaFree(d_v);
@@ -247,12 +230,11 @@ int main(void) {
   eigen_values(handle, cusolverH, A);
   t = clock() - t;
   double time_taken = ((double)t)/CLOCKS_PER_SEC;
-  printf("ComputeImage took %.4f seconds to execute \n", time_taken);
+  printf("Compute EigenValues took %.4f seconds to execute \n", time_taken);
   matrix_delete(A);
-  //if (handle ) cublasDestroy(handle);
 
   if (handle ) cublasDestroy(handle);
-  //if (cusolverH) cusolverDnDestroy(cusolverH
+  if (cusolverH) cusolverDnDestroy(cusolverH);
   cudaDeviceReset();
   return 0;
 }

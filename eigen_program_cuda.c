@@ -150,15 +150,10 @@ float *lanczos_ir(cublasHandle_t handle, cusolverDnHandle_t cusolverH,
   matrix_delete(Vm);
   q = matrix_zeros(Tm->m, Tm->n);
   float *eigs = qr_alg_eigen(Tm, q);
-  //matrix_delete(eigVector);
   matrix_delete(Tm);
   free(fm);
 
-  if (handle ) cublasDestroy(handle);
-  //if (cusolverH) cusolverDnDestroy(cusolverH
-  cudaDeviceReset();
   return eigs;
-  //return NULL;
 }
 void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A) {
 
@@ -170,16 +165,7 @@ void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A) {
     for (int i = 0; i < A->n; i++) {
         v[i] /= vNorm;
     }
-  /*  Mat *Vm = matrix_zeros(A->n, M);
-    Mat *Tm = matrix_zeros(M, M);
-    float *fm = malloc(sizeof(float) * A->m);
-    vect_print(v, A->n);
-    lanczos_facto(handle, A, v, 1, M, Vm, Tm, fm);
-    puts("VM:");
-    matrix_print(Vm);
-    puts("Tm:");
-    matrix_print(Tm);
-*/
+
     float *res = lanczos_ir(handle, cusolverH, A, v, K, M);
     printf("##### Eigen Values: #####\n");
     qsort(res, M, sizeof(*res), my_compare);
@@ -220,8 +206,9 @@ int main(void) {
   double time_taken = ((double)t)/CLOCKS_PER_SEC;
   printf("Compute EigenValues took %.4f seconds to execute \n", time_taken);
   matrix_delete(A);
-  //if (handle ) cublasDestroy(handle);
 
+  if (handle ) cublasDestroy(handle);
+  if (cusolverH) cusolverDnDestroy(cusolverH);
   cudaDeviceReset();
   return 0;
 }
