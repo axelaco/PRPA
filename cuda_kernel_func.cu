@@ -33,6 +33,9 @@ extern "C" void update_value(float *d_A, int idx, float val) {
 
 extern "C" float get_value(float *d_A, int idx) {
   float res = 0;
-  get_value_kernel<<<1,1>>>(d_A, idx, &res);
+  cudaMemcpy(&res, d_A + idx, sizeof(float), cudaMemcpyDeviceToHost);
+  /*get_value_kernel<<<1,1>>>(d_A, idx, &res);
+  printf("arr[%d] = %8.5f\n", idx,  res);
+  */
   return res;
 }

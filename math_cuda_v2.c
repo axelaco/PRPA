@@ -4,7 +4,28 @@
 #define BLOCK_SIZE 256
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
 
+static int cmp_abs (void const *a, void const *b)
+{
+   /* definir des pointeurs type's et initialise's
+      avec les parametres */
+   float const *pa = a;
+   float const *pb = b;
 
+   /* evaluer et retourner l'etat de l'evaluation (tri croissant) */
+   return abs(*pa) - abs(*pb);
+}
+
+// QSort Algorithm
+static int my_compare (void const *a, void const *b)
+{
+   /* definir des pointeurs type's et initialise's
+      avec les parametres */
+   float const *pa = a;
+   float const *pb = b;
+
+   /* evaluer et retourner l'etat de l'evaluation (tri croissant) */
+   return abs(*pb) - abs(*pa);
+}
 
 Mat *matrix_new(int m, int n) {
   Mat *res = malloc(sizeof(Mat));
@@ -67,7 +88,7 @@ float *qr_alg_eigen(Mat *A, Mat *eigVector) {
   float *h_eigVector_data = malloc(sizeof(float) * eigVector->m * eigVector->n);
 
   cudaMemcpy(h_diag, d_diag, sizeof(float) * A->m, cudaMemcpyDeviceToHost);
-  cudaMemcpy(h_off_diag, d_off_diag, sizeof(float) * A->m, cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_off_diag, d_off_diag, sizeof(float) * A->n - 1, cudaMemcpyDeviceToHost);
 
   float *WORK = malloc(sizeof(float) * 2 * A->n - 2);
   int n = A->n;
@@ -75,11 +96,12 @@ float *qr_alg_eigen(Mat *A, Mat *eigVector) {
   LAPACK_ssteqr("I", &n, h_diag, h_off_diag, h_eigVector_data, &n, WORK, &info);
   cudaMemcpy(eigVector->d_data, h_eigVector_data,
     sizeof(float) * eigVector->m * eigVector->n, cudaMemcpyHostToDevice);
-
+  qsort(h_diag, A->m, sizeof(*h_diag), my_compare);
+  cudaMemcpy(d_diag, h_diag, A->m * sizeof(float), cudaMemcpyHostToDevice);
   free(h_diag);
   free(h_off_diag);
   free(h_eigVector_data);
-  return h_diag;
+  return d_diag;
 }
 void qr(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, Mat *R, Mat *Q) {
   if (!A || !R || !Q)

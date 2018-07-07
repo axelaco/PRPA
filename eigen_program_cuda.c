@@ -136,7 +136,6 @@ float *lanczos_ir(cublasHandle_t handle, cusolverDnHandle_t cusolverH,
     Tm = matrix_zeros(m, m);
     fm = malloc(sizeof(float) * A->m);
     lanczos_facto(handle, A, Vk, k, m, Vm, Tm, fm);
-
     // delete all temporary variables
     free(QmK);
     matrix_delete(Qm);
@@ -171,7 +170,7 @@ void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A) {
     for (int i = 0; i < A->n; i++) {
         v[i] /= vNorm;
     }
-    Mat *Vm = matrix_zeros(A->n, M);
+  /*  Mat *Vm = matrix_zeros(A->n, M);
     Mat *Tm = matrix_zeros(M, M);
     float *fm = malloc(sizeof(float) * A->m);
     vect_print(v, A->n);
@@ -180,13 +179,13 @@ void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A) {
     matrix_print(Vm);
     puts("Tm:");
     matrix_print(Tm);
-/*
+*/
     float *res = lanczos_ir(handle, cusolverH, A, v, K, M);
     printf("##### Eigen Values: #####\n");
     qsort(res, M, sizeof(*res), my_compare);
     for (int i = 0; i < K; i++)
       printf("%8.5f\n", res[i]);
-    free(res);*/
+    free(res);
     free(v);
 }
 void init_random_matrix_sym(Mat *A) {

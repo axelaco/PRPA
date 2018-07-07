@@ -52,5 +52,6 @@ __global__ void update_value_kernel(float *d_A, int idx, float val) {
     d_A[idx] = val;
 }
 __global__ void get_value_kernel(float *d_A, int idx, float *res) {
-  *res = d_A[idx];
+  printf("%8.5f\n", d_A[idx]);
+  res[0] = d_A[idx];
 }
