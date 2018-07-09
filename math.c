@@ -29,7 +29,7 @@ float *rritz(Mat *Tm, float *mx, float *fm, int k, float nrmfr) {
   for (int i = 0; i < k; i++) {
     ritz[i] = vect_norm(fm, Tm->m) * qRow[i];
   }
-  *mx = vect_norm(ritz, k) / nrmfr;
+  *mx = vect_norm(ritz, k);
   return w;
 }
 
@@ -258,7 +258,7 @@ Mat *matrix_reduce(Mat *m, int maxCol) {
   Mat *res = matrix_new(m->m, maxCol);
   if (!res)
     return NULL;
-  float *eyeTmp = matrix_eye_bis(m->n, maxCol);  
+  float *eyeTmp = matrix_eye_bis(m->n, maxCol);
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m->m, res->n, m->n, 1, m->data, m->n, eyeTmp, res->n, 0, res->data, res->n);
   free(eyeTmp);
   return res;
@@ -390,7 +390,7 @@ void vect_mat_copy_cond(Mat *mat, float *u, int col, int line) {
         return;
     if (!mat->data)
         return;
-#ifdef NAIVE    
+#ifdef NAIVE
     if (!line) {
       for (int i = 0; i < (col + 1); i++) {
           mat->data[col + i * mat->n] = u[i];
@@ -428,7 +428,7 @@ float *vect_prod_mat_trans(Mat *mat, float *u) {
   float *res = malloc(sizeof(float) * mat->n);
   if (!res)
           return NULL;
-#ifdef NAIVE   
+#ifdef NAIVE
       for (int i = 0; i < mat->n; i++) {
           float sum = 0.0;
           for (int j = 0; j < mat->m; j++) {
@@ -444,7 +444,7 @@ float *vect_prod_mat_trans(Mat *mat, float *u) {
 }
 
 void compute_fm(float *fm, float *u,  float *w, int n, int m) {
-#ifdef NAIVE   
+#ifdef NAIVE
    for (int i = 0; i < m; i++) {
       float sum = 0;
       for (int j = 0; j < n; j++) {
@@ -453,13 +453,13 @@ void compute_fm(float *fm, float *u,  float *w, int n, int m) {
       fm[i] = w[i] - sum;
   }
 #elif INTEL_MKL
-  
+
   // v0 * v0.T
   float *res = malloc(sizeof(float) * n * m);
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, m, 1, 1, u, 1, u, 1, 0, res, m);
-        
+
   float *tmp = malloc(sizeof(float) * m);
-  
+
   // fm = w - v0 * v0.T * w
   cblas_sgemv(CblasRowMajor, CblasNoTrans, m, m, 1, res, m, w, 1, 0, tmp, 1);
   vsSub(m, w, tmp, fm);
@@ -494,7 +494,7 @@ float *get_column(Mat *mat, int col) {
     return NULL;
 
   for (int i = 0; i < mat->m; i++) {
-    x[i] = mat->data[col + i * mat->n];    
+    x[i] = mat->data[col + i * mat->n];
   }
   return x;
 }
@@ -509,7 +509,7 @@ float *get_column_start(Mat *mat, int col) {
  if (col >= mat->m)
     return NULL;
   for (int i = col; i < mat->m; i++)
-    x[i - col] = mat->data[col + i * mat->m];    
+    x[i - col] = mat->data[col + i * mat->m];
   return x;
 }
 void vect_substract(float *res, float *u , float *v, int m) {
@@ -553,4 +553,3 @@ void vect_scalar(float *u, float scalar, int n) {
 #endif
 */
 }
-

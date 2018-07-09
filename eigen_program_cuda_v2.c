@@ -1,8 +1,5 @@
 #include "math_cuda_v2.h"
 #include <time.h>
-#define N 100
-#define K 10
-#define M 20
 
 static int cmp_abs (void const *a, void const *b)
 {
@@ -171,10 +168,10 @@ float *lanczos_ir(cublasHandle_t handle, cusolverDnHandle_t cusolverH,
   matrix_delete(q);
   matrix_delete(Tm);
   cudaFree(d_fm);
-
+  printf("NB_ITER: %d\n", nb_iter);
   return d_eigs;
 }
-void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A) {
+void eigen_values(cublasHandle_t handle, cusolverDnHandle_t cusolverH, Mat *A, int K, int M) {
 
     int nb_iter = 0;
     float *d_v = NULL;
@@ -212,8 +209,10 @@ void init_random_matrix_sym(Mat *A) {
   free(h_data);
 }
 
-int main(void) {
-
+int main(int argc, char *argv[]) {
+  #define N atoi(argv[1])
+  #define K atoi(argv[2])
+  #define M atoi(argv[3])
   int tmp;
   Mat *A = matrix_new(N, N);
   cublasHandle_t handle = NULL;
@@ -225,7 +224,7 @@ int main(void) {
 
   init_random_matrix_sym(A);
   clock_t t = clock();
-  eigen_values(handle, cusolverH, A);
+  eigen_values(handle, cusolverH, A, K, M);
   t = clock() - t;
   double time_taken = ((double)t)/CLOCKS_PER_SEC;
   printf("N = %d K = %d M = %d\n", N, K, M);

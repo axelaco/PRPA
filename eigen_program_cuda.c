@@ -204,6 +204,7 @@ int main(void) {
   eigen_values(handle, cusolverH, A);
   t = clock() - t;
   double time_taken = ((double)t)/CLOCKS_PER_SEC;
+  
   printf("Compute EigenValues took %.4f seconds to execute \n", time_taken);
   matrix_delete(A);
 

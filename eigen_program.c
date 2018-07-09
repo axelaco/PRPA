@@ -1,9 +1,9 @@
 #include "math.h"
 #include <omp.h> // OpenMP
 #include <time.h>
-#define N 1000
-#define K 100
-#define M 200
+//#define N 50
+//#define K 10
+//#define M 20
 
 // QSort Algorithm
 static int my_compare (void const *a, void const *b)
@@ -177,7 +177,7 @@ float *lanczos_ir(Mat *A, float *v0, int k, int m) {
   float eps = 0.00001;
   lanczos_facto(A, v0, 1, m, Vm, Tm, fm);
   int nb_iter = 0;
-  while(residual > eps || nb_iter < 100) {
+  while(/*residual > eps &&*/ nb_iter < 100) {
     float *eigs = rritz(Tm, &residual, fm, k, residual);
     Qm = matrix_eye(m, m);
     for (int j = m - k; j >= 0; j--) {
@@ -248,6 +248,7 @@ float *lanczos_ir(Mat *A, float *v0, int k, int m) {
   matrix_delete(eigVector);
   matrix_delete(Tm);
   free(fm);
+  printf("NB_ITER: %d\n", nb_iter);
   return eigs;
 }
 void arnoldi_iteration(Mat *A, float *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm, float *fm) {
@@ -307,7 +308,7 @@ void arnoldi_iteration(Mat *A, float *v0, int k, int MAX_ITER, Mat *Hm, Mat *Vm,
     free(w);
 }
 
-void eigen_values(Mat *A) {
+void eigen_values(Mat *A, int K, int M) {
 
     int nb_iter = 0;
     float *v = calloc(A->n, sizeof(float));
@@ -438,8 +439,10 @@ void init_random_matrix_sym(Mat *A) {
  23.9167861938476562,
  23.9167861938476562,
  };
-int main(void) {
-
+int main(int argc, char* argv[]) {
+  #define N atoi(argv[1])
+  #define K atoi(argv[2])
+  #define M atoi(argv[3])
   int tmp;
   Mat *A = matrix_new(N, N);
   /*for (int i = 0; i < N * N; i++)
@@ -449,12 +452,10 @@ int main(void) {
   init_random_matrix_sym(A);
   //matrix_print(A);
   puts("");
-
-  clock_t t = clock();
-  eigen_values(A);
-  t = clock() - t;
-  double time_taken = ((double)t)/CLOCKS_PER_SEC;
-  printf("Compute EigenValues took %.4f seconds to execute \n", time_taken);
+  double start = omp_get_wtime();
+  eigen_values(A, K, M);
+  double stop = omp_get_wtime();
+  printf("Compute EigenValues took : %lf seconds to execute\n", stop-start);
   matrix_delete(A);
 
   return 0;

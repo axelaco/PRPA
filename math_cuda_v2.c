@@ -26,7 +26,24 @@ static int my_compare (void const *a, void const *b)
    /* evaluer et retourner l'etat de l'evaluation (tri croissant) */
    return abs(*pb) - abs(*pa);
 }
+float *rritz(Mat *Tm, float *mx, float *fm, int k, float nrmfr) {
+  Mat *q = matrix_zeros(Tm->m, Tm->n);
+  float *w = qr_alg_eigen(Tm, q);
+  int m = Tm->m;
+  float *qRow = matrix_get_row(q, q->n);
+  // sort by Magnitude
+  qsort(w, Tm->m, sizeof(*w), cmp_abs);
+  for (int i = 0; i < m; i++) {
+    qRow[i] = abs(qRow[i]);
+  }
 
+  float *ritz = malloc(sizeof(float) * k);
+  for (int i = 0; i < k; i++) {
+    ritz[i] = vect_norm(fm, Tm->m) * qRow[i];
+  }
+  *mx = vect_norm(ritz, k);
+  return w;
+}
 Mat *matrix_new(int m, int n) {
   Mat *res = malloc(sizeof(Mat));
   if (!res)
